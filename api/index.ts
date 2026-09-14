@@ -2,6 +2,10 @@
  * Serverless entry point (Vercel). A serverless function cannot hold a stream
  * open or poll in the background, so this deployment is deliberately bounded:
  *
+ * - Every /api/... request reaches this one function through a rewrite in
+ *   vercel.json that carries the original path in the __path query parameter,
+ *   because Vercel does not route nested paths to a catch-all file outside
+ *   Next.js. The original URL is restored before routing (server/vercelRouting.ts).
  * - The client polls: /api/health reports transport "poll", and /api/stream and
  *   /api/interest are not offered.
  * - Nothing polls between requests. The engine is never started, so each request
@@ -26,6 +30,7 @@ import { createPartyRoutes } from '../server/partyRoutes.js';
 import { EspnProvider } from '../server/providers/espn/provider.js';
 import { unavailablePush } from '../server/push/index.js';
 import { TeamService } from '../server/teams.js';
+import { originalApiUrl } from '../server/vercelRouting.js';
 import { VERSION } from '../shared/version.js';
 
 const LONG_LIVED = 'need the persistent Gridiron server';
@@ -61,5 +66,6 @@ function instance(): ReturnType<typeof createApp> {
 }
 
 export default async function gridiron(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  req.url = originalApiUrl(req.url);
   await instance()(req, res);
 }

@@ -5,8 +5,11 @@
  * an ES module. An import that Node cannot resolve, such as an extensionless relative path or a
  * JSON import, fails here instead of after a deploy.
  *
+ * Requests are also sent the way Vercel's rewrite delivers them (/api?__path=game/<id>, see
+ * vercel.json), so nested routes such as a game's detail are proven to reach their handlers.
+ *
  *   node scripts/check-serverless.mjs          loads the function and checks its offline routes
- *   node scripts/check-serverless.mjs --live   also reads today's slate from ESPN and Kalshi
+ *   node scripts/check-serverless.mjs --live   also reads today's slate, the latest finished game and Kalshi
  */
 import { transform } from 'esbuild';
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -44,13 +47,13 @@ const ok = (line) => console.log(`ok    ${line}`);
 
 let handler;
 try {
-  ({ default: handler } = await import(pathToFileURL(join(OUT, 'api', '[...path].js')).href));
+  ({ default: handler } = await import(pathToFileURL(join(OUT, 'api', 'index.js')).href));
 } catch (error) {
   console.error(`FAIL  the function did not load as an ES module: ${error.message}`);
   process.exit(1);
 }
 if (typeof handler !== 'function') {
-  console.error('FAIL  api/[...path].ts has no default export function');
+  console.error('FAIL  api/index.ts has no default export function');
   process.exit(1);
 }
 ok(`${files} files transpiled one at a time and loaded by plain Node`);
@@ -81,18 +84,49 @@ const party = await fetch(`${base}/api/party`, { method: 'POST', headers: { 'con
 if (party.status === 503) ok('watch parties: unavailable, with the reason');
 else failures.push(`POST /api/party answered ${party.status}, expected 503`);
 
+// Vercel rewrites every /api/... request to this function and carries the original path in __path.
+for (const [label, route] of [
+  ['a nested route', '/api/game/not-a-game'],
+  ['the same route as the rewrite delivers it', '/api?__path=game/not-a-game'],
+  ['a team page route as the rewrite delivers it', '/api?__path=team/not-a-team'],
+]) {
+  const answer = await get(route);
+  if (answer.status === 400 && /^Invalid (game|team) id$/.test(answer.body?.error ?? '')) ok(`routing: ${label} reaches its handler`);
+  else failures.push(`${route} answered ${answer.status} ${JSON.stringify(answer.body)?.slice(0, 120)}, expected 400 from its handler`);
+}
+
+const dayBefore = (key) => {
+  const d = new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(4, 6)) - 1, Number(key.slice(6, 8)) - 1));
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+};
+
 if (live) {
-  const slate = await get('/api/slate');
+  const slate = await get('/api?__path=slate');
   const games = Array.isArray(slate.body?.games) ? slate.body.games : [];
   if (slate.status === 200) ok(`slate: ${games.length} games on ${slate.body?.date}, ${games.filter((g) => g.market).length} with Kalshi prices`);
-  else failures.push(`/api/slate answered ${slate.status}`);
+  else failures.push(`/api?__path=slate answered ${slate.status}`);
   const priced = games.find((g) => g.market) ?? games[0];
   if (priced) {
-    const game = await get(`/api/game/${encodeURIComponent(priced.id)}`);
+    const game = await get(`/api?__path=game/${encodeURIComponent(priced.id)}`);
     const points = game.body?.detail?.marketHistory?.points?.length ?? 0;
     if (game.status === 200) ok(`game ${priced.shortName ?? priced.id}: detail version ${game.body?.version}, ${points ? `${points} Kalshi prices in its history` : 'no Kalshi price history'}`);
-    else failures.push(`/api/game/${priced.id} answered ${game.status}`);
+    else failures.push(`/api?__path=game/${priced.id} answered ${game.status}`);
   }
+  // The latest finished game in the past week, requested with a date in the query, as a past day's slate is.
+  let day = slate.body?.date;
+  let finished = null;
+  for (let back = 0; back < 7 && day && !finished; back++) {
+    day = dayBefore(day);
+    const past = await get(`/api?__path=slate&date=${day}`);
+    if (past.body?.date !== day) failures.push(`the slate for ${day} came back for ${past.body?.date}: the request query was lost`);
+    finished = (past.body?.games ?? []).find((g) => g.status?.kind === 'final' && g.coverage?.level !== 'score-only') ?? null;
+  }
+  if (finished) {
+    const game = await get(`/api?__path=game/${encodeURIComponent(finished.id)}`);
+    const d = game.body?.detail;
+    if (game.status === 200 && d?.plays?.length) ok(`finished game ${finished.shortName} (${day}): ${d.plays.length} plays, ${d.drives.length} drives, ${d.scoring.length} scores, ${d.stats.length} team stats`);
+    else failures.push(`finished game ${finished.id} answered ${game.status} with ${d?.plays?.length ?? 0} plays`);
+  } else failures.push('no finished game with play-by-play in the past week to check');
 }
 
 server.close();

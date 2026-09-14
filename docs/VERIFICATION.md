@@ -1,6 +1,40 @@
 # Verification report
 
-Five builds are recorded here: **0.5** first, then **0.4**, **0.3**, **0.2** and the original **0.1** report.
+Six builds are recorded here: **0.5.1** first, then **0.5**, **0.4**, **0.3**, **0.2** and the original **0.1** report.
+
+## Version 0.5.1
+
+Recorded Monday 14 September 2026, in the evening US Eastern. It covers a routing fault found on the live 0.5 deployment, and wording on the game page for games that have not started.
+
+### The fault on Vercel
+
+- On the deployed 0.5 site, built by Vercel from the project's GitHub repository, finished games showed no play-by-play, drives, scoring or team stats. Live games would have shown the same.
+- Requests to the live site showed why. `/api/health` and `/api/slate?date=20260913` answered 200 from the function, but `/api/game/nfl-401872926`, `/api/team/nfl-12` and `/api/push/key` answered 404 with `x-vercel-error: NOT_FOUND`, Vercel's own "The page could not be found". The function was never called for them.
+- Outside Next.js, Vercel matched `api/[...path].ts` as a single path segment, not as a catch-all. The earlier checks served the function from a plain Node server that sent every path to it, so they could not show this.
+- ESPN had the complete data throughout. Its summaries for ARI at LAC (13 September 2026), NYG at DAL (14 September 2025) and a college game from 12 September 2026 each carried every drive, play, scoring play and team stat.
+
+### The fix
+
+- The function is now `api/index.ts`, and the first rewrite in `vercel.json` sends `/api/:path*` to `/api?__path=:path*`. Vercel checks files before applying rewrites, and rewrites keep the request's own query string, as Vercel's documentation and guides describe. The function restores the original path before routing (`server/vercelRouting.ts`).
+- There is still one function, so every route keeps the same limits and warm instance.
+
+### Checks
+
+| Check | Result |
+| --- | --- |
+| Typecheck (`tsc`, strict) | Clean |
+| Unit and integration tests (`npm test`) | **446 passed** in 51 files, including new tests for restoring the carried path, the rewrite in `vercel.json`, and the wording before kickoff |
+| End-to-end journeys, production build, replay mode | **67 passed**: 60 in Chrome and 7 in WebKit |
+| `npm run check:serverless -- --live` | Nested routes reached their handlers, both directly and in the form the rewrite delivers. The latest finished game, TB at CIN on 13 September 2026, came back with 177 plays, 18 drives, 12 scores and 15 team stats, requested with its date in the query |
+| The polled client against the function, with the rewrite applied by a local server | BUF at HOU on 13 September showed 188 plays with its drives, scoring and team stats. The Arizona team page loaded, and ARI at LAC opened from it showed 184 plays |
+| A game a week before kickoff (SEA at ARI) | "No plays reported yet", and no score-only wording anywhere on the page |
+
+Screenshots and performance were not recorded again, since nothing they cover changed.
+
+### Not verified for 0.5.1
+
+- **Vercel itself.** The fix has not been deployed yet. Once it is, `/api/game/nfl-401872926` on the site should answer with the game's JSON instead of Vercel's 404.
+- The rewrite was applied by a local server written to follow the `vercel.json` rule, not by Vercel.
 
 ## Version 0.5
 

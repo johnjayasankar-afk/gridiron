@@ -23,6 +23,9 @@ describe('ESPN lines, win probability and matchup predictor', () => {
     expect(detail.summary.predictor?.away).toBeCloseTo(0.401, 9);
     expect(detail.summary.winProbability).toBeUndefined();
     expect(detail.winProbability).toBeUndefined();
+    // Before kickoff ESPN's summary reports play-by-play as "none"; that is not score-only coverage.
+    expect(detail.summary.status.kind).toBe('scheduled');
+    expect(detail.summary.coverage.level).not.toBe('score-only');
   });
 
   it('reads the closing lines and the win probability after every play of a finished game', () => {

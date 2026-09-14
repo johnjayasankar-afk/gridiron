@@ -824,7 +824,8 @@ export function normalizeSummary(
     season: { year: num(at(header, 'season', 'year')), type: num(at(header, 'season', 'type')), week: num(header.week) },
     notes: [],
     coverage: {
-      level: pbpSource === 'full' ? 'full' : pbpSource === 'none' ? 'score-only' : 'unknown',
+      // Before kickoff the summary marks play-by-play as unavailable even for fully covered games, so that is not a coverage level yet.
+      level: pbpSource === 'full' ? 'full' : pbpSource === 'none' && status.kind !== 'scheduled' ? 'score-only' : 'unknown',
       score: true,
       situation: situation !== null,
       playByPlay: playsWithTeams.length > 0,

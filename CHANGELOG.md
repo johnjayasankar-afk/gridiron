@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.1
+
+14 September 2026
+
+### Fixed
+
+- **Game pages and team pages on Vercel.** Outside Next.js, Vercel does not treat `api/[...path].ts` as a catch-all. It matched a single path segment, so `/api/slate` worked while `/api/game/<id>`, `/api/team/<id>` and `/api/push/key` got Vercel's own 404. On a Vercel deployment every game page, past or live, showed no play-by-play, drives, scoring or team stats, and team pages could not load.
+  - The function is now `api/index.ts`, and a rewrite in `vercel.json` sends every `/api/...` request to it with the original path, which the function restores before routing.
+  - `npm run check:serverless` now also sends requests the way the rewrite delivers them, and with `--live` loads the latest finished game's play-by-play.
+- **Games that have not started** are no longer described as score-only on the game page. ESPN's game summary reports play-by-play as unavailable before kickoff, which the scoreboard reading already allowed for.
+
 ## 0.5.0
 
 14 September 2026

@@ -55,7 +55,7 @@ Limits are stated where something could not be verified. Measured results are in
 | Requirement | Status | Evidence |
 | --- | --- | --- |
 | React, TypeScript, Vite, R3F, Drei, Zustand, Lucide, Node server (shared polling, SSE), Vitest, Playwright | Done | `package.json` |
-| One dev command; production build and start; deploy instructions; bounded serverless routes | Done | `npm run dev`, `npm run build`, `npm start`; README Deploy; `api/[...path].ts` and `vercel.json`. Vercel was not deployed; since 0.3 the adapter is exercised locally with the smoke test |
+| One dev command; production build and start; deploy instructions; bounded serverless routes | Done | `npm run dev`, `npm run build`, `npm start`; README Deploy; `api/index.ts` and `vercel.json`, whose rewrite sends every API path to the function (since 0.5.1). The 0.5 deployment showed nested API routes answering with Vercel's own 404; 0.5.1 was checked locally, not yet on Vercel |
 
 ## 3D fields and placement
 
@@ -211,6 +211,13 @@ Limits are stated where something could not be verified. Measured results are in
 | The game page, settings dialogs and command palette load on first use and are fetched when the page is idle | Done | Build output in VERIFICATION.md; E2E game page, dialog and palette journeys pass with the new chunks |
 | Scoreboard shows the down, distance and spot beneath the clock | Done | Screens `game-1440-isometric` |
 | Stadium light towers glow instead of showing flat white panels | Done | Screens `game-390-panels`; reviewed in screenshots only |
+
+## Version 0.5.1
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Every API route reaches the Vercel function, including game detail, team pages and the push key | Done, not yet deployed | On the 0.5 deployment, `/api/game/<id>`, `/api/team/<id>` and `/api/push/key` answered with Vercel's own 404 while `/api/slate` worked. Unit `vercelRouting.test.ts` (restoring the carried path, the `vercel.json` rewrite, a single function file); `npm run check:serverless -- --live` (nested routes in the rewrite form, and a finished game's play-by-play); Browser: the polled client against the function with the rewrite applied (a past game's play-by-play, drives, scoring and stats, a team page, and a past game opened from it) |
+| Games that have not started are not called score-only on the game page | Done | Unit `espnOdds.test.ts` (the captured pre-kickoff summary); Browser: SEA at ARI, a week before kickoff, shows "No plays reported yet" and no score-only wording |
 
 ## Not verifiable during the build
 

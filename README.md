@@ -154,8 +154,9 @@ Running several instances works, but each one polls separately, and watch partie
 
 ### Vercel (bounded)
 
-`vercel.json` and `api/[...path].ts` are included. Serverless functions cannot hold streams open or poll between requests, so this deployment is deliberately limited:
+`vercel.json` and `api/index.ts` are included. Serverless functions cannot hold streams open or poll between requests, so this deployment is deliberately limited:
 
+- Every `/api/...` request reaches the one function through a rewrite in `vercel.json` that carries the original path, and the function restores it before routing. Outside Next.js, Vercel does not treat a `[...path]` file as a catch-all: in 0.5, game detail and team pages got Vercel's own 404.
 - The client polls instead of streaming (`/api/health` reports `transport: "poll"`).
 - Nothing polls in the background. Each request fetches what it needs within the fetcher's time budget.
 - Kalshi prices are read when a slate is requested, and a game's Kalshi price history when its detail is, waiting at most 3 seconds each.
@@ -164,7 +165,7 @@ Running several instances works, but each one polls separately, and watch partie
 
 Deploy with the Vercel CLI or dashboard. Framework preset: Other. The build and output settings come from `vercel.json`, and no environment variables are needed.
 
-Vercel runs the function as Node ES modules, one transpiled file at a time, so every import in `api/`, `server/` and `shared/` names its `.js` file (TypeScript, Vite, Vitest and esbuild map it to the `.ts` source). `npm run check:serverless` loads the function that way and checks its routes, and `npm run check:serverless -- --live` also reads today's slate and a game's detail. CI runs the offline check.
+Vercel runs the function as Node ES modules, one transpiled file at a time, so every import in `api/`, `server/` and `shared/` names its `.js` file (TypeScript, Vite, Vitest and esbuild map it to the `.ts` source). `npm run check:serverless` loads the function that way and checks its routes, including requests in the form the rewrite delivers them, and `npm run check:serverless -- --live` also reads today's slate, a game's detail and the latest finished game's play-by-play. CI runs the offline check.
 
 ### Continuous integration
 
