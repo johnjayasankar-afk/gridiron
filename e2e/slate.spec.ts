@@ -1,0 +1,61 @@
+import { expect, test } from '@playwright/test';
+import { liveCards, openReplay } from './helpers';
+
+test.describe('slate', () => {
+  test('lists live games first, then upcoming and final, clearly labeled as a replay @cross', async ({ page }) => {
+    await openReplay(page, { at: 0.3 });
+    await expect(liveCards(page).first()).toBeVisible();
+    await expect(page.locator('.replay-bar')).toContainText('Captured real games, not live');
+    const headings = await page.locator('.slate-section h2').allInnerTexts();
+    expect(headings[0]).toBe('Live now');
+    expect(headings.indexOf('Live now')).toBeLessThan(Math.max(headings.indexOf('Up next'), headings.indexOf('Final')));
+    await expect(liveCards(page).first().locator('.status-pill')).toContainText(/Q\d|OT|Halftime|End/);
+  });
+
+  test('says plainly when nothing is live, with next kickoffs and a labeled demo', async ({ page }) => {
+    await openReplay(page, { at: 0 });
+    await expect(page.getByRole('heading', { name: 'No games are live right now.' })).toBeVisible();
+    await expect(page.locator('.quiet-block').filter({ hasText: 'Next kickoffs' }).locator('.mini-row').first()).toBeVisible();
+    await expect(page.locator('.section-live')).toHaveCount(0);
+    await expect(page.locator('.quiet-demo')).toContainText('Replay');
+  });
+
+  test('filters by league, search text and live-only', async ({ page }) => {
+    await openReplay(page, { at: 0.3 });
+    await expect(liveCards(page).first()).toBeVisible();
+    const league = page.getByRole('group', { name: 'League' });
+    await league.getByRole('button', { name: 'College' }).click();
+    await expect(page.locator('.card')).toHaveCount(0);
+    await league.getByRole('button', { name: 'NFL' }).click();
+    await expect(page.locator('.card').first()).toBeVisible();
+
+    await page.getByPlaceholder('Filter games').fill('Bills');
+    await expect(page.locator('.card')).toHaveCount(1);
+    await expect(page.locator('.card')).toContainText('BUF');
+    await page.getByPlaceholder('Filter games').fill('');
+
+    await page.getByRole('button', { name: /Filters/ }).click();
+    await page.getByRole('switch', { name: 'Live games only' }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.section-upcoming, .section-final')).toHaveCount(0);
+    await expect(liveCards(page).first()).toBeVisible();
+  });
+
+  test('draws twelve or more fields through one shared canvas', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 3200 });
+    await openReplay(page, { at: 0.3 });
+    await expect(liveCards(page).first()).toBeVisible();
+    await expect.poll(async () => page.locator('.field-view').count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(12);
+    // Every field shares one canvas; the page atmosphere behind the interface is a separate, decorative one.
+    await expect(page.locator('.field-canvas canvas')).toHaveCount(1);
+    const info = await page.evaluate(() => window.__gridironGraphics?.info());
+    expect(info?.views).toBeGreaterThanOrEqual(12);
+    expect(info?.dpr).toBeLessThanOrEqual(1.25);
+  });
+
+  test('shows a field message instead of guessing when a spot is not reported', async ({ page }) => {
+    await openReplay(page, { scenario: 'test-missing-spot', at: 0.5 });
+    await expect(page.locator('.card').first()).toBeVisible();
+    await expect(page.locator('.field-message', { hasText: 'Ball spot unavailable' }).first()).toBeVisible({ timeout: 45_000 });
+  });
+});

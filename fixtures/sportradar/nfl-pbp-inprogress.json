@@ -1,0 +1,330 @@
+{
+  "id": "0a000000-0000-4000-8000-000000000002",
+  "status": "inprogress",
+  "scheduled": "2026-09-14T00:20:00+00:00",
+  "clock": "12:59",
+  "quarter": 1,
+  "summary": {
+    "home": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "name": "Gulls", "market": "Harbor City", "points": 0, "remaining_timeouts": 2 },
+    "away": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "name": "Coyotes", "market": "Red Mesa", "points": 7, "remaining_timeouts": 3 }
+  },
+  "periods": [
+    {
+      "number": 1,
+      "pbp": [
+        {
+          "type": "drive",
+          "id": "d0000000-0000-4000-8000-000000000001",
+          "sequence": 1789345262000,
+          "start_reason": "Kickoff",
+          "end_reason": "Touchdown",
+          "play_count": 3,
+          "duration": "01:08",
+          "net_yards": 75,
+          "offensive_team": { "id": "7e000000-0000-4000-8000-000000000002", "points": 7 },
+          "events": [
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000001",
+              "sequence": 1789345262000,
+              "clock": "15:00",
+              "wall_clock": "2026-09-14T00:21:02+00:00",
+              "play_type": "kickoff",
+              "description": "HCG kicks off to the RMC end zone. Touchback.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 0,
+              "scoring_play": false,
+              "start_situation": {
+                "clock": "15:00",
+                "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "yardline": 35 }
+              },
+              "end_situation": {
+                "clock": "15:00",
+                "down": 1,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 25 }
+              }
+            },
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000002",
+              "sequence": 1789345301000,
+              "clock": "15:00",
+              "wall_clock": "2026-09-14T00:21:41+00:00",
+              "play_type": "pass",
+              "description": "RMC quarterback pass short right to RMC receiver for 7 yards.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 0,
+              "scoring_play": false,
+              "start_situation": {
+                "clock": "15:00",
+                "down": 1,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 25 }
+              },
+              "end_situation": {
+                "clock": "14:31",
+                "down": 2,
+                "yfd": 3,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 32 }
+              }
+            },
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000003",
+              "sequence": 1789345342000,
+              "clock": "14:31",
+              "wall_clock": "2026-09-14T00:22:22+00:00",
+              "play_type": "penalty",
+              "description": "PENALTY on RMC, False Start, 5 yards, enforced at RMC 32.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 0,
+              "scoring_play": false,
+              "start_situation": {
+                "clock": "14:31",
+                "down": 2,
+                "yfd": 3,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 32 }
+              },
+              "end_situation": {
+                "clock": "14:31",
+                "down": 2,
+                "yfd": 8,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 27 }
+              },
+              "details": [
+                {
+                  "category": "penalty",
+                  "yards": 5,
+                  "start_location": { "alias": "RMC", "yardline": 32 },
+                  "end_location": { "alias": "RMC", "yardline": 27 }
+                }
+              ]
+            },
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000004",
+              "sequence": 1789345380000,
+              "clock": "14:31",
+              "wall_clock": "2026-09-14T00:23:00+00:00",
+              "play_type": "rush",
+              "description": "RMC running back up the middle for 28 yards.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 0,
+              "scoring_play": false,
+              "start_situation": {
+                "clock": "14:31",
+                "down": 2,
+                "yfd": 8,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 27 }
+              },
+              "end_situation": {
+                "clock": "14:05",
+                "down": 1,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "yardline": 45 }
+              }
+            },
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000005",
+              "sequence": 1789345421000,
+              "clock": "14:05",
+              "wall_clock": "2026-09-14T00:23:41+00:00",
+              "play_type": "pass",
+              "description": "RMC quarterback pass deep left to RMC receiver for 45 yards, TOUCHDOWN.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 6,
+              "scoring_play": true,
+              "start_situation": {
+                "clock": "14:05",
+                "down": 1,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "yardline": 45 }
+              },
+              "end_situation": {
+                "clock": "13:52",
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "yardline": 15 }
+              },
+              "details": [
+                {
+                  "category": "pass_completion",
+                  "yards": 45,
+                  "result": "touchdown",
+                  "start_location": { "alias": "HCG", "yardline": 45 },
+                  "end_location": { "alias": "HCG", "yardline": 0 }
+                }
+              ]
+            },
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000006",
+              "sequence": 1789345470000,
+              "clock": "13:52",
+              "wall_clock": "2026-09-14T00:24:30+00:00",
+              "play_type": "extra_point",
+              "description": "RMC kicker extra point is GOOD.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 7,
+              "scoring_play": true,
+              "start_situation": {
+                "clock": "13:52",
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "yardline": 15 }
+              },
+              "end_situation": {
+                "clock": "13:52",
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 35 }
+              },
+              "details": [{ "category": "extra_point", "result": "good" }]
+            }
+          ]
+        },
+        {
+          "type": "drive",
+          "id": "d0000000-0000-4000-8000-000000000002",
+          "sequence": 1789345560000,
+          "start_reason": "Kickoff",
+          "play_count": 3,
+          "duration": "00:53",
+          "net_yards": 40,
+          "offensive_team": { "id": "7e000000-0000-4000-8000-000000000001", "points": 0 },
+          "events": [
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000007",
+              "sequence": 1789345560000,
+              "clock": "13:52",
+              "wall_clock": "2026-09-14T00:26:00+00:00",
+              "play_type": "kickoff",
+              "description": "RMC kicks off to the HCG end zone. Touchback.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 7,
+              "scoring_play": false,
+              "start_situation": {
+                "clock": "13:52",
+                "possession": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 35 }
+              },
+              "end_situation": {
+                "clock": "13:52",
+                "down": 1,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "yardline": 25 }
+              }
+            },
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000008",
+              "sequence": 1789345601000,
+              "clock": "13:52",
+              "wall_clock": "2026-09-14T00:26:41+00:00",
+              "play_type": "rush",
+              "description": "HCG running back around left end for 37 yards.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 7,
+              "scoring_play": false,
+              "start_situation": {
+                "clock": "13:52",
+                "down": 1,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "yardline": 25 }
+              },
+              "end_situation": {
+                "clock": "13:20",
+                "down": 1,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 38 }
+              }
+            },
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000009",
+              "sequence": 1789345640000,
+              "clock": "13:20",
+              "wall_clock": "2026-09-14T00:27:20+00:00",
+              "play_type": "pass",
+              "description": "HCG quarterback pass incomplete deep right.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 7,
+              "scoring_play": false,
+              "start_situation": {
+                "clock": "13:20",
+                "down": 1,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 38 }
+              },
+              "end_situation": {
+                "clock": "13:14",
+                "down": 2,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 38 }
+              }
+            },
+            {
+              "type": "event",
+              "id": "e0000000-0000-4000-8000-000000000001",
+              "sequence": 1789345660000,
+              "clock": "13:14",
+              "wall_clock": "2026-09-14T00:27:40+00:00",
+              "event_type": "timeout",
+              "description": "Timeout #1 by RMC."
+            },
+            {
+              "type": "play",
+              "id": "p0000000-0000-4000-8000-000000000010",
+              "sequence": 1789345702000,
+              "clock": "13:14",
+              "wall_clock": "2026-09-14T00:28:22+00:00",
+              "play_type": "rush",
+              "description": "HCG running back up the middle for 3 yards.",
+              "official": true,
+              "home_points": 0,
+              "away_points": 7,
+              "scoring_play": false,
+              "start_situation": {
+                "clock": "13:14",
+                "down": 2,
+                "yfd": 10,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 38 }
+              },
+              "end_situation": {
+                "clock": "12:59",
+                "down": 3,
+                "yfd": 7,
+                "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+                "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 35 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

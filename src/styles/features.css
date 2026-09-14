@@ -1,0 +1,1576 @@
+/*
+ * Feature surfaces added in 0.3: the drive strip on cards and the drive chart on
+ * the game page. Positions come from reported spots, set inline as percentages
+ * of the 100 yards between the goal lines (away goal line on the left).
+ */
+
+/* ---------------------------------------------------------------- drive strip (cards) */
+
+.dstrip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 7;
+  display: grid;
+  grid-template-columns: auto minmax(48px, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 18px 12px 8px;
+  background: linear-gradient(to top, rgba(2, 8, 5, 0.9) 0%, rgba(2, 8, 5, 0.6) 58%, rgba(2, 8, 5, 0) 100%);
+  color: var(--on-dark-2);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.dstrip-name {
+  max-width: 13em;
+  overflow: hidden;
+  color: #eafff5;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dstrip.is-empty .dstrip-name {
+  color: var(--on-dark-3);
+  font-weight: 500;
+}
+
+.dstrip-stat {
+  color: var(--on-dark-2);
+  white-space: nowrap;
+}
+
+.dstrip-field {
+  display: grid;
+  grid-template-columns: 5px minmax(0, 1fr) 5px;
+  height: 12px;
+}
+
+.dstrip-ez.is-away {
+  border-radius: 3px 0 0 3px;
+  background: var(--ez-away);
+  opacity: 0.85;
+}
+
+.dstrip-ez.is-home {
+  border-radius: 0 3px 3px 0;
+  background: var(--ez-home);
+  opacity: 0.85;
+}
+
+.dstrip-track {
+  position: relative;
+  background:
+    repeating-linear-gradient(90deg, rgba(214, 251, 234, 0.24) 0 1px, transparent 1px 10%) 0 50% / 100% 6px no-repeat,
+    linear-gradient(rgba(214, 251, 234, 0.12), rgba(214, 251, 234, 0.12)) 0 50% / 100% 2px no-repeat;
+}
+
+.dstrip.is-empty .dstrip-track {
+  opacity: 0.5;
+}
+
+.dstrip-range {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--drive) 22%, transparent), var(--drive));
+  box-shadow: 0 0 10px -1px color-mix(in srgb, var(--drive) 70%, transparent);
+  transition: left 620ms var(--ease), width 620ms var(--ease);
+}
+
+.dstrip-range.is-ball-left {
+  background: linear-gradient(270deg, color-mix(in srgb, var(--drive) 22%, transparent), var(--drive));
+}
+
+.dstrip-range::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+  transform: translateX(-100%);
+}
+
+.dstrip-tick {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 6px;
+  margin: -3px 0 0 -1px;
+  border-radius: 1px;
+  background: rgba(234, 255, 245, 0.5);
+}
+
+.dstrip-tick.tone-score {
+  background: var(--mint);
+  box-shadow: 0 0 6px var(--mint-2);
+}
+
+.dstrip-tick:is(.tone-turnover, .tone-conceded) {
+  background: #ff9a8f;
+}
+
+.dstrip-tick.tone-penalty {
+  background: var(--amber);
+}
+
+.dstrip-tick.tone-kick {
+  background: var(--sky);
+}
+
+.dstrip-start {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: rgba(234, 255, 245, 0.78);
+  transition: left 620ms var(--ease);
+}
+
+.dstrip-ltg {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--amber);
+  box-shadow: 0 0 8px rgba(244, 170, 92, 0.85);
+  transition: left 620ms var(--ease);
+}
+
+.dstrip-ball {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: #f6fffb;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--drive) 85%, transparent), 0 0 12px 2px color-mix(in srgb, var(--drive) 70%, transparent);
+  transition: left 620ms var(--ease);
+}
+
+.dstrip-ball.is-live::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 1px solid var(--drive);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+/* Wall tiles and compact cards: the track alone, on the field's bottom edge. */
+.dstrip.is-compact {
+  display: block;
+  padding: 0 8px 5px;
+  background: none;
+}
+
+.dstrip.is-compact.is-empty {
+  display: none;
+}
+
+.dstrip.is-compact .dstrip-field {
+  grid-template-columns: 3px minmax(0, 1fr) 3px;
+  height: 6px;
+}
+
+.dstrip.is-compact .dstrip-tick {
+  display: none;
+}
+
+.dstrip.is-compact .dstrip-ball {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+}
+
+/* The play label moves above the strip. */
+.field-slot:has(> .dstrip:not(.is-compact)) .field-label {
+  bottom: 44px;
+}
+
+.field-slot:has(> .dstrip.is-compact:not(.is-empty)) .field-label {
+  bottom: 15px;
+}
+
+@container (max-height: 300px) {
+  .wall .dstrip-stat {
+    display: none;
+  }
+}
+
+/* Short wall tiles keep only the track. */
+@container (max-height: 230px) {
+  .wall .dstrip {
+    display: block;
+    padding: 0 8px 4px;
+    background: none;
+  }
+
+  .wall .dstrip.is-empty,
+  .wall :is(.dstrip-name, .dstrip-stat, .dstrip-tick) {
+    display: none;
+  }
+
+  .wall .dstrip-field {
+    grid-template-columns: 3px minmax(0, 1fr) 3px;
+    height: 6px;
+  }
+
+  .wall .dstrip-ball {
+    width: 6px;
+    height: 6px;
+    margin: -3px 0 0 -3px;
+  }
+
+  .wall .field-slot:has(> .dstrip) .field-label {
+    bottom: 14px;
+  }
+}
+
+@container (max-height: 150px) {
+  .wall .dstrip {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- game page field controls */
+
+/* The camera switch keeps its light pill on the dark field in both themes. */
+.camera-bar .seg.has-indicator::before {
+  background: var(--mint);
+}
+
+/* The camera controls wrap before they reach the orbit hint. */
+.field-slot:has(> .field-hint) .camera-bar {
+  max-width: calc(100% - 290px);
+}
+
+@media (max-width: 720px), (hover: none) {
+  .field-hint {
+    display: none;
+  }
+
+  .field-slot:has(> .field-hint) .camera-bar {
+    max-width: none;
+  }
+}
+
+@keyframes dstrip-ping {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes dstrip-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-effects='full'] .dstrip-ball.is-live::after {
+    animation: dstrip-ping 2.4s var(--ease) infinite;
+  }
+
+  :root[data-effects='full'] .dstrip.is-live .dstrip-range::after {
+    animation: dstrip-sheen 3.2s var(--ease) infinite;
+  }
+}
+
+:root:not([data-effects='full']) :is(.dstrip-range, .dstrip-start, .dstrip-ltg, .dstrip-ball) {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.dstrip-range, .dstrip-start, .dstrip-ltg, .dstrip-ball) {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- drive chart (game page) */
+
+.dchart {
+  --gut-l: 60px;
+  --gut-r: 42px;
+  --dchart-grid: color-mix(in srgb, var(--text) 10%, transparent);
+  gap: 6px;
+}
+
+.dchart-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dchart-team {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+:root[data-theme='dark'] .dchart-team {
+  text-shadow: 0 0 18px color-mix(in srgb, var(--drive) 50%, transparent);
+}
+
+.dchart-state {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: var(--pill);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dchart-state.is-live {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--live) 50%, transparent);
+  color: var(--live-ink);
+}
+
+.dchart-state.is-score {
+  background: color-mix(in srgb, var(--live) 16%, transparent);
+  color: var(--live-ink);
+}
+
+.dchart-stats {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+:root[data-theme='dark'] .dchart.is-live {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--drive) 32%, var(--border)), var(--shadow-1), 0 0 44px -20px color-mix(in srgb, var(--drive) 70%, transparent);
+}
+
+.dchart-scale {
+  height: 14px;
+  margin-top: 8px;
+  padding: 0 var(--gut-r) 0 var(--gut-l);
+  color: var(--text-3);
+  font-size: 9.5px;
+  line-height: 14px;
+}
+
+.dchart-scale-lane {
+  position: relative;
+  display: block;
+  height: 100%;
+}
+
+.dchart-scale-lane > span {
+  position: absolute;
+  top: 0;
+  translate: -50% 0;
+}
+
+.dchart-plot {
+  position: relative;
+  padding-block: 4px;
+}
+
+.dchart-lane {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--gut-l);
+  right: var(--gut-r);
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, var(--dchart-grid) 0 1px, transparent 1px 10%),
+    linear-gradient(90deg, color-mix(in srgb, var(--ez-away) 16%, transparent), transparent 14%, transparent 86%, color-mix(in srgb, var(--ez-home) 16%, transparent));
+  box-shadow: inset -1px 0 0 var(--dchart-grid);
+  pointer-events: none;
+}
+
+.dchart-ez {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+
+.dchart-ez.is-away {
+  left: -3px;
+  border-radius: 2px 0 0 2px;
+  background: var(--ez-away);
+}
+
+.dchart-ez.is-home {
+  right: -3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--ez-home);
+}
+
+.dchart-line {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+}
+
+.dchart-line.is-start {
+  border-left: 1.5px dashed color-mix(in srgb, var(--text) 45%, transparent);
+}
+
+.dchart-line.is-ltg {
+  border-left-color: var(--amber);
+  filter: drop-shadow(0 0 4px rgba(244, 170, 92, 0.7));
+}
+
+.dchart-line.is-ball {
+  border-left-color: var(--sky);
+  filter: drop-shadow(0 0 5px rgba(138, 190, 240, 0.85));
+}
+
+.dchart-rows {
+  position: relative;
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dchart-row,
+.dchart-now {
+  --tone: var(--drive);
+  display: grid;
+  grid-template-columns: var(--gut-l) minmax(0, 1fr) var(--gut-r);
+  align-items: center;
+  width: 100%;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.dchart-row {
+  cursor: pointer;
+}
+
+.dchart-row:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.dchart-row.is-selected {
+  background: color-mix(in srgb, var(--sky) 16%, transparent);
+  box-shadow: inset 2px 0 0 var(--sky);
+}
+
+.dchart-row:is(.tone-loss, .tone-turnover, .tone-conceded) {
+  --tone: var(--danger-ink);
+}
+
+.dchart-row.tone-penalty {
+  --tone: var(--amber);
+}
+
+.dchart-row.tone-kick {
+  --tone: var(--sky);
+}
+
+.dchart-row.tone-score {
+  --tone: var(--live);
+}
+
+.dchart-row:is(.tone-even, .tone-unknown) {
+  --tone: var(--text-3);
+}
+
+.dchart-dd {
+  overflow: hidden;
+  padding-left: 6px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dchart-out {
+  padding-right: 6px;
+  color: var(--text-2);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dchart-row.tone-score .dchart-out {
+  color: var(--live-ink);
+  font-weight: 700;
+}
+
+.dchart-row:is(.tone-loss, .tone-turnover, .tone-conceded) .dchart-out {
+  color: var(--danger-ink);
+}
+
+.dchart-row.tone-penalty .dchart-out {
+  color: var(--attention-ink);
+}
+
+.dchart-cell {
+  position: relative;
+  height: 22px;
+}
+
+.dchart-bar {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: var(--tone);
+  box-shadow: 0 0 8px -1px color-mix(in srgb, var(--tone) 75%, transparent);
+}
+
+.dchart-bar::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  margin-top: -4px;
+  border-block: 4px solid transparent;
+}
+
+.dchart-bar.is-right::after {
+  right: -5px;
+  border-left: 6px solid var(--tone);
+}
+
+.dchart-bar.is-left::after {
+  left: -5px;
+  border-right: 6px solid var(--tone);
+}
+
+.dchart-row.tone-kick .dchart-bar {
+  background: repeating-linear-gradient(90deg, var(--tone) 0 5px, transparent 5px 8px);
+  box-shadow: none;
+}
+
+.dchart-dot {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.dchart-dot.is-partial {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--tone);
+}
+
+.dchart-nospot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.dchart-now .dchart-dd {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dchart-now .dchart-out {
+  color: var(--text-3);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dchart-pulse {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--sky);
+  box-shadow: 0 0 12px 2px rgba(138, 190, 240, 0.7);
+}
+
+.dchart-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 1.5px solid var(--sky);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-effects='full'] .dchart-pulse::after {
+    animation: dstrip-ping 2s var(--ease) infinite;
+  }
+}
+
+.dchart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 4px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.dchart-legend:empty {
+  display: none;
+}
+
+.dchart-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dchart-key::before {
+  content: '';
+  width: 14px;
+  border-top: 2px solid transparent;
+}
+
+.dchart-key.is-start::before {
+  border-top: 2px dashed color-mix(in srgb, var(--text) 45%, transparent);
+}
+
+.dchart-key.is-ltg::before {
+  border-top-color: var(--amber);
+}
+
+.dchart-key.is-ball::before {
+  border-top-color: var(--sky);
+}
+
+.dchart-note {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.dchart-empty {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+@media (forced-colors: active) {
+  :is(.dstrip-range, .dstrip-ball, .dstrip-ltg, .dstrip-start, .dchart-bar, .dchart-dot, .dchart-pulse) {
+    forced-color-adjust: none;
+    background: CanvasText;
+    box-shadow: none;
+  }
+
+  .dchart-line {
+    border-left-color: CanvasText;
+  }
+}
+
+/* ---------------------------------------------------------------- team links */
+
+.team-link {
+  color: inherit;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.team-link:hover {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* ---------------------------------------------------------------- team page */
+
+.team {
+  display: grid;
+  gap: 16px;
+}
+
+.team-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.team-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 32px;
+  padding: 22px 30px;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(560px 340px at 16% 78%, color-mix(in srgb, var(--team) 28%, transparent), transparent 70%),
+    radial-gradient(440px 260px at 100% 0%, color-mix(in srgb, var(--team-2) 16%, transparent), transparent 70%),
+    var(--glass-strong, var(--surface));
+  box-shadow: var(--shadow-1), 0 0 0 1px color-mix(in srgb, var(--team) 32%, var(--border));
+}
+
+.team-hero::after {
+  --b: color-mix(in srgb, var(--team) 60%, var(--hud-dim, var(--border-2)));
+  content: '';
+  position: absolute;
+  inset: 8px;
+  background:
+    linear-gradient(var(--b), var(--b)) left top / 14px 1.5px no-repeat,
+    linear-gradient(var(--b), var(--b)) left top / 1.5px 14px no-repeat,
+    linear-gradient(var(--b), var(--b)) right bottom / 14px 1.5px no-repeat,
+    linear-gradient(var(--b), var(--b)) right bottom / 1.5px 14px no-repeat;
+  pointer-events: none;
+}
+
+.team-hero.is-loading {
+  min-height: 250px;
+}
+
+.team-skeleton-emblem {
+  width: 180px;
+  height: 180px;
+  margin: 0 auto;
+  border-radius: 50%;
+}
+
+.team-skeleton-line {
+  width: 40%;
+  height: 14px;
+  border-radius: 7px;
+}
+
+.team-skeleton-title {
+  width: 70%;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.team-holo {
+  position: relative;
+  height: 250px;
+  perspective: 720px;
+  perspective-origin: 50% 20%;
+}
+
+.team-holo-floor {
+  position: absolute;
+  left: 50%;
+  bottom: -64px;
+  width: 250px;
+  height: 250px;
+  margin-left: -125px;
+  transform: rotateX(72deg);
+  transform-style: preserve-3d;
+}
+
+.team-floor-grid {
+  position: absolute;
+  inset: -38%;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle, color-mix(in srgb, var(--team) 40%, transparent) 0 1px, transparent 1px 20px),
+    repeating-conic-gradient(color-mix(in srgb, var(--team) 28%, transparent) 0 0.5deg, transparent 0.5deg 15deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 66%);
+  mask: radial-gradient(circle, #000 18%, transparent 66%);
+  opacity: 0.6;
+}
+
+.team-ring {
+  position: absolute;
+  border: 1.5px solid color-mix(in srgb, var(--team) 82%, #ffffff 18%);
+  border-radius: 50%;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--team) 62%, transparent), inset 0 0 22px color-mix(in srgb, var(--team) 42%, transparent);
+}
+
+.team-ring.r1 {
+  inset: 0;
+}
+
+.team-ring.r2 {
+  inset: 16%;
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.team-ring.r3 {
+  inset: 33%;
+  border-width: 3px;
+}
+
+.team-beam {
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  width: 200px;
+  height: 220px;
+  margin-left: -100px;
+  background: linear-gradient(to top, color-mix(in srgb, var(--team) 58%, transparent), transparent 88%);
+  clip-path: polygon(36% 100%, 64% 100%, 100% 0, 0 0);
+  filter: blur(8px);
+  opacity: 0.55;
+}
+
+.team-shadow {
+  position: absolute;
+  left: 50%;
+  top: 176px;
+  width: 132px;
+  height: 26px;
+  margin-left: -66px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--team) 55%, rgba(0, 0, 0, 0.6)), transparent);
+  filter: blur(2px);
+}
+
+.team-emblem {
+  position: absolute;
+  left: 50%;
+  top: 20px;
+  margin-left: -66px;
+  filter: drop-shadow(0 0 26px color-mix(in srgb, var(--team) 70%, transparent)) drop-shadow(0 16px 16px rgba(0, 0, 0, 0.4));
+}
+
+@keyframes team-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes team-float {
+  50% {
+    translate: 0 -9px;
+  }
+}
+
+@keyframes team-glow {
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-effects='full'] .team-ring.r2 {
+    animation: team-spin 26s linear infinite;
+  }
+
+  :root[data-effects='full'] .team-ring.r3 {
+    animation: team-spin 13s linear infinite reverse;
+  }
+
+  :root[data-effects='full'] .team-floor-grid {
+    animation: team-spin 80s linear infinite;
+  }
+
+  :root[data-effects='full'] .team-emblem {
+    animation: team-float 6s ease-in-out infinite;
+  }
+
+  :root[data-effects='full'] .team-beam {
+    animation: team-glow 4.8s ease-in-out infinite;
+  }
+}
+
+.team-id {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.team-title {
+  margin: 0;
+  font-size: clamp(32px, 4.6vw, 54px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+}
+
+.team-title .team-rank {
+  margin-right: 12px;
+  font-size: 0.45em;
+  vertical-align: middle;
+}
+
+.team-sub {
+  color: var(--text-2);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin: 6px 0;
+}
+
+.team-stats dt {
+  color: var(--text-tone);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-stats dd {
+  margin: 2px 0 0;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+:root[data-theme='dark'] .team-stats dd {
+  text-shadow: 0 0 20px color-mix(in srgb, var(--team) 45%, transparent);
+}
+
+.team-replay-note {
+  max-width: 52ch;
+  color: var(--attention-ink);
+  font-size: 13px;
+}
+
+.team-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-glance {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.glance-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.glance-main {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.glance-opp {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.glance-meta {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.glance-result {
+  font-size: 22px;
+  white-space: nowrap;
+}
+
+.glance-open {
+  justify-self: start;
+}
+
+.tone-win.glance-result,
+.sched-result.tone-win {
+  color: var(--live-ink);
+}
+
+.tone-loss.glance-result,
+.sched-result.tone-loss {
+  color: var(--danger-ink);
+}
+
+.tone-live.glance-result,
+.sched-result.tone-live {
+  color: var(--info-ink, var(--sky));
+}
+
+:root[data-theme='dark'] .glance.tone-live {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--live) 40%, var(--border)), var(--shadow-1), 0 0 40px -18px var(--live);
+}
+
+.season-rail {
+  display: grid;
+  grid-auto-columns: minmax(88px, 1fr);
+  grid-auto-flow: column;
+  margin: 4px 0 0;
+  padding: 2px 0 10px;
+  overflow-x: auto;
+  list-style: none;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.season-node {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 6px 4px 10px;
+  border-radius: 10px;
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+  scroll-snap-align: start;
+}
+
+.season-node::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 31px;
+  height: 2px;
+  background: color-mix(in srgb, var(--team) 45%, var(--border-2));
+}
+
+.season-rail > li:first-child > .season-node::before {
+  left: 50%;
+}
+
+.season-rail > li:last-child > .season-node::before {
+  right: 50%;
+}
+
+a.season-node:hover {
+  background: color-mix(in srgb, var(--team) 12%, transparent);
+}
+
+.sn-week {
+  color: var(--text-3);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+
+.sn-dot {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface-solid, var(--surface));
+  box-shadow: 0 0 0 2px var(--border-2);
+}
+
+.season-node.is-win .sn-dot {
+  background: var(--live);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--live) 40%, transparent), 0 0 14px var(--live);
+}
+
+.season-node.is-loss .sn-dot {
+  background: var(--danger-ink);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger-ink) 35%, transparent);
+}
+
+.season-node.is-tie .sn-dot {
+  background: var(--amber);
+}
+
+.season-node.is-live .sn-dot {
+  background: var(--sky);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sky) 40%, transparent), 0 0 16px var(--sky);
+}
+
+.season-node.is-next .sn-dot {
+  box-shadow: 0 0 0 2px var(--team), 0 0 16px var(--team);
+}
+
+.sn-opp {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sn-out {
+  color: var(--text-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.season-node.is-win .sn-out {
+  color: var(--live-ink);
+}
+
+.season-node.is-loss .sn-out {
+  color: var(--danger-ink);
+}
+
+.season-node.is-bye {
+  color: var(--text-3);
+}
+
+.sn-bye {
+  margin-top: 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.margin-plot {
+  position: relative;
+  display: grid;
+  grid-auto-columns: minmax(22px, 56px);
+  grid-auto-flow: column;
+  justify-content: space-around;
+  gap: 8px;
+  height: 180px;
+  margin-top: 6px;
+  padding-bottom: 22px;
+}
+
+.margin-plot::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((100% - 22px) / 2);
+  height: 1px;
+  background: var(--border-2);
+}
+
+.margin-col {
+  position: relative;
+}
+
+.margin-bar {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  height: calc(var(--m) * 42%);
+  min-height: 2px;
+  border-radius: 3px;
+}
+
+.margin-col.is-win .margin-bar {
+  bottom: 50%;
+  background: linear-gradient(to top, color-mix(in srgb, var(--team) 55%, transparent), var(--team));
+  box-shadow: 0 0 16px -2px color-mix(in srgb, var(--team) 70%, transparent);
+}
+
+.margin-col.is-loss .margin-bar {
+  top: 50%;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--danger-ink) 50%, transparent), var(--danger-ink));
+}
+
+.margin-col.is-tie .margin-bar {
+  top: calc(50% - 1.5px);
+  height: 3px;
+  background: var(--amber);
+}
+
+.margin-val {
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  color: var(--text-2);
+  font-size: 10.5px;
+  text-align: center;
+}
+
+.margin-col.is-win .margin-val,
+.margin-col.is-tie .margin-val {
+  bottom: calc(50% + var(--m) * 42% + 4px);
+}
+
+.margin-col.is-loss .margin-val {
+  top: calc(50% + var(--m) * 42% + 4px);
+}
+
+.margin-wk {
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  bottom: -22px;
+  color: var(--text-3);
+  font-size: 10px;
+  text-align: center;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.schedule-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-tone);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.schedule-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.schedule-table tr.is-live td {
+  background: color-mix(in srgb, var(--live) 8%, transparent);
+}
+
+.sched-opp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sched-result {
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.sched-result:hover {
+  text-decoration: underline;
+}
+
+.team-source {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .team-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px 18px 20px;
+  }
+
+  .team-holo {
+    height: 220px;
+  }
+
+  .team-stats dd {
+    font-size: 20px;
+  }
+}
+
+/* ---------------------------------------------------------------- watch parties */
+
+.party-btn {
+  position: relative;
+}
+
+.party-btn.is-active {
+  color: var(--live-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--live) 45%, transparent);
+}
+
+.party-banner {
+  align-items: center;
+}
+
+.party-pulse {
+  position: relative;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--live);
+  box-shadow: 0 0 12px var(--live);
+}
+
+.party-pulse.is-paused {
+  background: var(--amber);
+  box-shadow: 0 0 10px var(--amber);
+}
+
+.party-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 1.5px solid var(--live);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-effects='full'] .party-pulse:not(.is-paused)::after {
+    animation: dstrip-ping 2.2s var(--ease) infinite;
+  }
+}
+
+.party-start {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+.party-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.party-stat strong {
+  font-size: 34px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+:root[data-theme='dark'] .party-stat strong {
+  color: var(--live-ink);
+  text-shadow: 0 0 20px color-mix(in srgb, var(--live) 55%, transparent);
+}
+
+.party-invite {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.party-link-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.party-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.party-link-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border-2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.party-qr {
+  display: block;
+  width: 136px;
+  height: 136px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--border), 0 0 34px -8px color-mix(in srgb, var(--live) 55%, transparent);
+}
+
+@media (max-width: 520px) {
+  .party-invite {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .party-qr {
+    justify-self: center;
+  }
+}
+
+/* ---------------------------------------------------------------- push alerts */
+
+.push-teams {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.push-teams strong {
+  color: var(--text);
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.push-controls {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.push-controls:disabled {
+  opacity: 0.55;
+}
+
+.push-controls > .btn {
+  justify-self: start;
+}
+
+.push-unavailable {
+  color: var(--attention-ink);
+}
+
+/* ---------------------------------------------------------------- field chrome and header */
+
+/* Hints stay legible over the bright parts of the 3D stadium. */
+.field-detail :is(.field-hint, .field-orientation) {
+  padding: 3px 9px;
+  border-radius: var(--pill);
+  background: rgba(2, 8, 5, 0.58);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* On narrower screens the header controls scroll sideways; the edge fades so the overflow reads as intentional. */
+@media (max-width: 1279px) {
+  .hdr-controls {
+    padding-right: 36px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  }
+}
+
+/* ---------------------------------------------------------------- not found and view errors */
+
+.not-found {
+  position: relative;
+}
+
+.not-found-code {
+  margin: 0 0 6px;
+  background: var(--numeral, linear-gradient(180deg, #f4fff9, #6ee7b7));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(88px, 16vw, 168px);
+  font-weight: 600;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+  filter: drop-shadow(0 0 34px rgba(110, 231, 183, 0.35));
+}
+
+.not-found-path {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-error-details {
+  max-width: 60ch;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.view-error-details pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------------------------------- pop-out tracker */
+
+.popout-body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.popout {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 12px 14px;
+  background:
+    radial-gradient(260px 160px at 0% 0%, color-mix(in srgb, var(--team-away) 24%, transparent), transparent 70%),
+    radial-gradient(260px 160px at 100% 0%, color-mix(in srgb, var(--team-home) 24%, transparent), transparent 70%),
+    var(--bg);
+  color: var(--text);
+}
+
+.popout-score {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.popout-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.popout-abbr {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.popout-num {
+  justify-self: center;
+  font-size: 34px;
+}
+
+.popout-status {
+  justify-self: center;
+}
+
+.popout-line {
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.popout-field {
+  position: relative;
+  height: 46px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #03110b;
+  box-shadow: inset 0 0 0 1px rgba(167, 243, 208, 0.12);
+}
+
+.popout-last {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.popout-wait {
+  margin-top: 40px;
+  color: var(--text-2);
+  text-align: center;
+}

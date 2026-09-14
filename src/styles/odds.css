@@ -1,0 +1,474 @@
+/*
+ * Odds and win probability: the card meter and odds strip, the game page panel and
+ * the win probability chart. Layering rules still hold: nothing here is an ancestor
+ * of a field slot, and the only motion is on the meter's own children.
+ */
+
+/* ---------------------------------------------------------------- card */
+
+.card-odds {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 10px;
+  min-width: 0;
+}
+
+.card-odds:empty {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- win probability meter */
+
+.wp-meter {
+  --wp-h: 5px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wp-meter.is-large {
+  --wp-h: 10px;
+  gap: 12px;
+}
+
+.wp-label {
+  color: var(--text-3);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.wp-track {
+  position: relative;
+  display: flex;
+  height: var(--wp-h);
+  overflow: hidden;
+  border-radius: var(--pill);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.wp-track::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
+}
+
+.wp-fill {
+  flex: none;
+  height: 100%;
+  transition: width 700ms var(--ease);
+}
+
+.wp-fill.is-away {
+  background: var(--wp-away);
+}
+
+.wp-fill.is-home {
+  background: var(--wp-home);
+}
+
+.wp-fill.is-tie {
+  background: color-mix(in srgb, var(--text) 35%, transparent);
+}
+
+.wp-meter.is-pregame .wp-fill {
+  background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--bg) 35%, transparent) 4px 6px);
+}
+
+:root[data-theme='dark'] .wp-fill.is-away {
+  box-shadow: 0 0 12px -2px var(--wp-away);
+}
+
+:root[data-theme='dark'] .wp-fill.is-home {
+  box-shadow: 0 0 12px -2px var(--wp-home);
+}
+
+.wp-read {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wp-meter.is-large .wp-read {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.wp-team {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.wp-meter.is-large .wp-team {
+  font-size: 13px;
+}
+
+.wp-swing {
+  padding: 1px 7px;
+  border-radius: var(--pill);
+  background: color-mix(in srgb, var(--live) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--live) 40%, transparent);
+  color: var(--live-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: wp-swing 4.5s var(--ease) both;
+}
+
+@keyframes wp-swing {
+  0% {
+    opacity: 0;
+    translate: 0 3px;
+  }
+  8%,
+  78% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+:root:not([data-effects='full']) .wp-fill {
+  transition: none;
+}
+
+:root:not([data-effects='full']) .wp-swing {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wp-fill {
+    transition: none;
+  }
+
+  .wp-swing {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- odds strip */
+
+.odds-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.odds-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: var(--pill);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.odds-chip.is-market {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8abef0 38%, var(--border));
+}
+
+.odds-chip.is-stale,
+.odds-block.is-stale .odds-now {
+  color: var(--text-3);
+}
+
+.odds-src {
+  color: var(--text-3);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------- game page panel */
+
+.odds-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.odds-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.odds-head .eyebrow {
+  margin: 0;
+}
+
+.odds-format .seg-btn,
+.flow-view .seg-btn {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+.odds-wp {
+  display: grid;
+  gap: 6px;
+}
+
+.odds-note,
+.odds-foot {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.odds-foot {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.odds-block {
+  display: grid;
+  gap: 4px;
+}
+
+.odds-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.odds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.odds-table th,
+.odds-table td {
+  padding: 7px 2px;
+  border-top: 1px solid var(--border);
+  text-align: right;
+  vertical-align: top;
+}
+
+.odds-table thead th,
+.odds-table thead td {
+  padding-top: 0;
+  border-top: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.odds-table th[scope='row'] {
+  color: var(--text-2);
+  font-weight: 500;
+  text-align: left;
+}
+
+.odds-table td[colspan] {
+  display: table-cell;
+}
+
+.odds-now {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.odds-price {
+  margin-left: 6px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.odds-open {
+  display: block;
+  color: var(--text-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.odds-off {
+  color: var(--text-3);
+}
+
+.odds-label {
+  margin-right: 8px;
+  color: var(--text-2);
+}
+
+.odds-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+:root[data-theme='dark'] .odds-wp .wp-read {
+  text-shadow: 0 0 18px color-mix(in srgb, var(--mint) 35%, transparent);
+}
+
+/* ---------------------------------------------------------------- game flow: win probability view */
+
+.flow-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.flow-title .eyebrow {
+  margin: 0;
+}
+
+.wp-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.wp-hit {
+  position: absolute;
+  cursor: crosshair;
+}
+
+.wp-selected,
+.wp-hover {
+  stroke: var(--text-3);
+  stroke-width: 1;
+}
+
+.wp-selected {
+  stroke: var(--mint);
+  stroke-dasharray: 3 3;
+}
+
+.wp-dot {
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------- market price history */
+
+:root {
+  --market: #2e78b8;
+}
+
+:root[data-theme='dark'] {
+  --market: #8abef0;
+}
+
+.wp-market {
+  fill: none;
+  stroke: var(--market);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 3;
+  stroke-linejoin: round;
+}
+
+.wp-market-end,
+.odds-spark-end {
+  fill: var(--market);
+}
+
+.flow-key.is-market {
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(90deg, var(--market) 0 5px, transparent 5px 8px);
+  vertical-align: middle;
+}
+
+.flow-tip-market {
+  margin: 2px 0 0;
+  color: var(--text-2);
+  font-size: 11.5px;
+}
+
+.odds-trend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+
+.odds-spark {
+  flex: none;
+  overflow: visible;
+}
+
+.odds-spark-line {
+  fill: none;
+  stroke: var(--market);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.odds-spark-mid,
+.odds-spark-kick {
+  stroke: var(--border-2);
+  stroke-width: 1;
+}
+
+.odds-spark-kick {
+  stroke-dasharray: 2 2;
+}
+
+.odds-trend-text {
+  flex: 1;
+  min-width: 150px;
+  margin: 0;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.odds-trend-text .odds-now {
+  margin-right: 6px;
+}
+
+.odds-move {
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- pop-out and wall */
+
+.popout-wp {
+  margin: 2px 0 4px;
+}
+
+@container (max-height: 300px) {
+  .wall .card-odds .odds-strip {
+    display: none;
+  }
+}
+
+@container (max-height: 230px) {
+  .wall .card-odds {
+    display: none;
+  }
+}

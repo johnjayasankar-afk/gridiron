@@ -1,0 +1,88 @@
+{
+  "recordedAt": "2026-09-14T20:40:14.736Z",
+  "environment": "Production build, replay mode (nfl-week1-sunday from 35%, 60x), headless Chrome via Playwright, viewport 1920x3200",
+  "summary": {
+    "cards": 13,
+    "fieldViews": 13,
+    "canvases": 1,
+    "atmosphereCanvases": 1,
+    "longTasksOver50ms": 0,
+    "longestTaskMs": 0,
+    "jsHeapMB": 34,
+    "moments": 14
+  },
+  "samples": [
+    {
+      "at": 5975,
+      "calls": 176,
+      "triangles": 25884,
+      "geometries": 24,
+      "textures": 33,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.48,
+      "frames": 138
+    },
+    {
+      "at": 11023,
+      "calls": 173,
+      "triangles": 25880,
+      "geometries": 24,
+      "textures": 33,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.97,
+      "frames": 288
+    },
+    {
+      "at": 16073,
+      "calls": 165,
+      "triangles": 24886,
+      "geometries": 22,
+      "textures": 33,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.72,
+      "frames": 405
+    },
+    {
+      "at": 21125,
+      "calls": 138,
+      "triangles": 23354,
+      "geometries": 24,
+      "textures": 33,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.77,
+      "frames": 641
+    },
+    {
+      "at": 26174,
+      "calls": 164,
+      "triangles": 24884,
+      "geometries": 24,
+      "textures": 33,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.73,
+      "frames": 810
+    },
+    {
+      "at": 31223,
+      "calls": 162,
+      "triangles": 24880,
+      "geometries": 23,
+      "textures": 33,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.87,
+      "frames": 893
+    }
+  ]
+}

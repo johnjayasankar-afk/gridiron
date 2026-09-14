@@ -1,0 +1,61 @@
+{
+  "provider": "ESPN site API (undocumented)",
+  "capturedAt": null,
+  "source": "Trimmed from ESPN site API responses saved on 2026-09-14 during research (not fetched again)",
+  "files": [
+    {
+      "file": "nfl-team-2.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2",
+      "note": "Buffalo Bills team document",
+      "providerTimestamp": null
+    },
+    {
+      "file": "nfl-team-2-schedule-2026.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/schedule?season=2026&seasontype=2",
+      "note": "Buffalo 2026 regular season",
+      "providerTimestamp": "2026-09-14T14:35:14Z"
+    },
+    {
+      "file": "cfb-team-333.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/333",
+      "note": "Alabama Crimson Tide team document",
+      "providerTimestamp": null
+    },
+    {
+      "file": "cfb-team-333-schedule-2026.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/333/schedule?season=2026&seasontype=2",
+      "note": "Alabama 2026 regular season",
+      "providerTimestamp": "2026-09-14T14:36:43Z"
+    },
+    {
+      "file": "nfl-team-2-schedule-2025.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/schedule?season=2025&seasontype=2",
+      "note": "Buffalo 2025 regular season, for bye weeks",
+      "providerTimestamp": "2026-09-14T14:35:52Z"
+    },
+    {
+      "file": "cfb-team-333-schedule-2025.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/333/schedule?season=2025&seasontype=2",
+      "note": "Alabama 2025 regular season, to merge with its postseason",
+      "providerTimestamp": "2026-09-14T14:36:41Z"
+    },
+    {
+      "file": "cfb-team-333-schedule-2025-st3.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/333/schedule?season=2025&seasontype=3",
+      "note": "Alabama 2025 postseason",
+      "providerTimestamp": "2026-09-14T14:30:59Z"
+    },
+    {
+      "file": "nfl-team-2-schedule-2026-st1.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/schedule?season=2026&seasontype=1",
+      "note": "Buffalo 2026 preseason",
+      "providerTimestamp": "2026-09-14T14:36:42Z"
+    },
+    {
+      "file": "nfl-team-2-schedule-2026-st3.json",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/schedule?season=2026&seasontype=3",
+      "note": "Buffalo 2026 postseason, before it has any games",
+      "providerTimestamp": "2026-09-14T14:36:42Z"
+    }
+  ]
+}

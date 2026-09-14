@@ -1,0 +1,32 @@
+{
+  "id": "0a000000-0000-4000-8000-000000000002",
+  "status": "inprogress",
+  "scheduled": "2026-09-14T00:20:00+00:00",
+  "clock": "12:59",
+  "quarter": 1,
+  "summary": {
+    "home": {
+      "id": "7e000000-0000-4000-8000-000000000001",
+      "alias": "HCG",
+      "name": "Gulls",
+      "market": "Harbor City",
+      "points": 0,
+      "remaining_timeouts": 2
+    },
+    "away": {
+      "id": "7e000000-0000-4000-8000-000000000002",
+      "alias": "RMC",
+      "name": "Coyotes",
+      "market": "Red Mesa",
+      "points": 7,
+      "remaining_timeouts": 3
+    }
+  },
+  "situation": {
+    "clock": "12:59",
+    "down": 3,
+    "yfd": 7,
+    "possession": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG" },
+    "location": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "yardline": 35 }
+  }
+}

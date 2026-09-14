@@ -1,0 +1,48 @@
+{
+  "name": "gridiron",
+  "version": "0.5.0",
+  "description": "Every game. Every drive. One view. A live NFL and college football command center.",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "tsx watch --clear-screen=false server/index.ts",
+    "dev:web": "vite",
+    "build": "npm run typecheck && vite build && node scripts/compress-assets.mjs && node scripts/build-server.mjs",
+    "start": "node dist-server/index.mjs",
+    "start:replay": "GRIDIRON_PROVIDER=replay node dist-server/index.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "smoke": "tsx scripts/smoke.ts",
+    "check:serverless": "node scripts/check-serverless.mjs",
+    "fixtures": "tsx scripts/capture-fixtures.ts"
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.5.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.0"
+  },
+  "dependencies": {
+    "@react-three/drei": "10.7.8",
+    "@react-three/fiber": "9.7.0",
+    "lucide-react": "1.45.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "three": "0.186.0",
+    "zustand": "5.0.15"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

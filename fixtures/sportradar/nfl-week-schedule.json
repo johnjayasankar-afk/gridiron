@@ -1,0 +1,29 @@
+{
+  "week": {
+    "games": [
+      {
+        "id": "0a000000-0000-4000-8000-000000000001",
+        "status": "closed",
+        "scheduled": "2026-09-13T17:00:00+00:00",
+        "home": { "id": "7e000000-0000-4000-8000-000000000003", "alias": "LKP", "name": "Pilots" },
+        "away": { "id": "7e000000-0000-4000-8000-000000000004", "alias": "IVF", "name": "Forge" },
+        "scoring": { "home_points": 24, "away_points": 20 }
+      },
+      {
+        "id": "0a000000-0000-4000-8000-000000000002",
+        "status": "inprogress",
+        "scheduled": "2026-09-14T00:20:00+00:00",
+        "home": { "id": "7e000000-0000-4000-8000-000000000001", "alias": "HCG", "name": "Gulls" },
+        "away": { "id": "7e000000-0000-4000-8000-000000000002", "alias": "RMC", "name": "Coyotes" },
+        "scoring": { "home_points": 0, "away_points": 7 }
+      },
+      {
+        "id": "0a000000-0000-4000-8000-000000000003",
+        "status": "scheduled",
+        "scheduled": "2026-09-15T00:15:00+00:00",
+        "home": { "id": "7e000000-0000-4000-8000-000000000005", "alias": "BAY", "name": "Tides" },
+        "away": { "id": "7e000000-0000-4000-8000-000000000006", "alias": "SUM", "name": "Peaks" }
+      }
+    ]
+  }
+}

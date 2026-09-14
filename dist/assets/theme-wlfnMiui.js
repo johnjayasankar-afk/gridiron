@@ -1,0 +1,2 @@
+import{K as e,Y as t,r as n}from"./jsx-runtime-C1-jHyVE.js";var r=t(e(),1);function i(e){let[t,n]=(0,r.useState)(()=>typeof window<`u`&&!!window.matchMedia?.(e).matches);return(0,r.useEffect)(()=>{let t=window.matchMedia?.(e);if(!t)return;let r=()=>n(t.matches);return r(),t.addEventListener(`change`,r),()=>t.removeEventListener(`change`,r)},[e]),t}var a=`(prefers-color-scheme: dark)`;function o(e,t){return e===`system`?t?`dark`:`light`:e}function s(){return o(n(e=>e.theme),i(a))}var c=()=>s()===`dark`;export{s as n,i as r,c as t};
+//# sourceMappingURL=theme-wlfnMiui.js.map

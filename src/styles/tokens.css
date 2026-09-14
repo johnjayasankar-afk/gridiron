@@ -1,0 +1,207 @@
+/*
+ * Gridiron design tokens.
+ * The first block is the portfolio / Labs system, verbatim. Everything after it
+ * is Gridiron's semantic layer, defined once for light and once for dark.
+ */
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-var.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --ground: #f8f6f1;
+  --ground-2: #f1efe9;
+  --paper: #ffffff;
+
+  --ink: #0f1712;
+  --ink-2: #48524c;
+  --ink-3: #5f6862;
+  --tone: #6f7f75;
+
+  --line: rgba(28, 51, 38, 0.09);
+  --line-2: rgba(28, 51, 38, 0.16);
+
+  --forest: #1c3326;
+  --forest-2: #1f6b4a;
+  --forest-3: #13241b;
+  --night: #0a140f;
+
+  --on-dark: #f0f7f3;
+  --on-dark-2: rgba(240, 247, 243, 0.74);
+  --on-dark-3: rgba(240, 247, 243, 0.6);
+
+  --mint: #a7f3d0;
+  --mint-2: #6ee7b7;
+  --mint-3: #34d399;
+
+  --amber: #f4aa5c;
+  --sky: #8abef0;
+
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --shadow-1: 0 1px 2px rgba(28, 51, 38, 0.05);
+  --shadow-2: 0 1px 2px rgba(28, 51, 38, 0.05), 0 14px 32px -14px rgba(28, 51, 38, 0.22);
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ---------------------------------------------------------------- semantic: light */
+:root {
+  color-scheme: light;
+  --bg: var(--ground);
+  --bg-2: var(--ground-2);
+  --surface: var(--paper);
+  --surface-2: #fbfaf7;
+  --surface-sunk: var(--ground-2);
+  --text: var(--ink);
+  --text-2: var(--ink-2);
+  --text-3: var(--ink-3);
+  --text-tone: var(--tone);
+  --border: var(--line);
+  --border-2: var(--line-2);
+  --focus: var(--forest-2);
+
+  --control-bg: linear-gradient(180deg, #2c5a42 0%, #1a3a2a 100%);
+  --control-ink: #ffffff;
+  --control-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(15, 23, 18, 0.25), 0 10px 24px -12px rgba(19, 36, 27, 0.6);
+  --ghost-bg: #ffffff;
+  --ghost-ring: 0 0 0 1px var(--line-2), 0 1px 2px rgba(28, 51, 38, 0.06);
+  --selected-bg: var(--forest);
+  --selected-ink: #ffffff;
+
+  /* live activity, selection, positive emphasis */
+  --live: var(--mint-3);
+  --live-soft: rgba(52, 211, 153, 0.14);
+  --live-ink: #11643f; /* mint reads too light as text on paper */
+  /* high attention */
+  --attention: var(--amber);
+  --attention-soft: rgba(244, 170, 92, 0.18);
+  --attention-ink: #8a4a0b;
+  --danger-ink: #9a2f21;
+  --danger-soft: rgba(154, 47, 33, 0.1);
+  --info: var(--sky);
+  --info-ink: #1d4e84;
+
+  --dots: radial-gradient(circle at 1px 1px, rgba(28, 51, 38, 0.06) 1px, transparent 1.2px);
+  --field-env: radial-gradient(120% 90% at 50% 30%, #1f3b2d 0%, #13241b 55%, #0d1a13 100%);
+  --field-env-edge: rgba(19, 36, 27, 0.9);
+  --field-dots: radial-gradient(circle at 1px 1px, rgba(240, 247, 243, 0.055) 1px, transparent 1.3px);
+
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --pill: 999px;
+
+  --shadow-3: 0 1px 2px rgba(28, 51, 38, 0.05), 0 30px 64px -28px rgba(28, 51, 38, 0.32);
+  --overlay: rgba(10, 20, 15, 0.42);
+
+  --hdr: 64px;
+  --rail: 340px;
+  --gutter: clamp(14px, 2.4vw, 28px);
+
+  /* HUD layer (Day) */
+  --surface-solid: #ffffff;
+  --glow: rgba(31, 107, 74, 0.35);
+  --glow-soft: rgba(31, 107, 74, 0.1);
+  --hud: rgba(31, 107, 74, 0.5);
+  --hud-dim: rgba(31, 107, 74, 0.18);
+  --edge: linear-gradient(145deg, rgba(31, 107, 74, 0.3), rgba(31, 107, 74, 0.04) 34%, rgba(29, 78, 132, 0.04) 66%, rgba(29, 78, 132, 0.18));
+  --edge-live: linear-gradient(145deg, rgba(31, 107, 74, 0.62), rgba(31, 107, 74, 0.08) 40%, rgba(52, 211, 153, 0.1) 60%, rgba(31, 107, 74, 0.45));
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(251, 250, 247, 0.92) 100%);
+  --glass-strong: linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%);
+  --numeral: linear-gradient(180deg, #0f1712 0%, #1f4a35 100%);
+  --title: linear-gradient(180deg, #0f1712 0%, #1c3326 100%);
+  --scan: repeating-linear-gradient(0deg, rgba(28, 51, 38, 0.018) 0 1px, transparent 1px 3px);
+  --spot: rgba(31, 107, 74, 0.06);
+  --atmo-bg: #f8f6f1;
+  --atmo-grid: #1f6b4a;
+  --atmo-beam: #ffffff;
+  --atmo-strength: 0.55;
+  --atmo-beams: 0;
+  --atmo-vignette: 0.2;
+}
+
+/* ---------------------------------------------------------------- semantic: Night (default; green-black with mint light) */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #030806;
+  --bg-2: #07110c;
+  --surface: rgba(9, 20, 15, 0.82);
+  --surface-2: rgba(13, 28, 21, 0.88);
+  --surface-sunk: rgba(1, 6, 4, 0.55);
+  --surface-solid: #0a1510;
+  --text: var(--on-dark);
+  --text-2: rgba(240, 247, 243, 0.76);
+  --text-3: rgba(240, 247, 243, 0.62);
+  --text-tone: rgba(167, 243, 208, 0.68);
+  --border: rgba(167, 243, 208, 0.09);
+  --border-2: rgba(167, 243, 208, 0.19);
+  --focus: var(--mint-2);
+
+  --control-bg: linear-gradient(180deg, #c8f9e2 0%, #6ee7b7 100%);
+  --control-ink: #042015;
+  --control-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 0 1px rgba(110, 231, 183, 0.55), 0 10px 30px -10px rgba(110, 231, 183, 0.6);
+  --ghost-bg: rgba(167, 243, 208, 0.045);
+  --ghost-ring: 0 0 0 1px rgba(167, 243, 208, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --selected-bg: var(--mint);
+  --selected-ink: #042015;
+
+  --live: var(--mint-2);
+  --live-soft: rgba(110, 231, 183, 0.14);
+  --live-ink: #8ef0c8;
+  --attention: var(--amber);
+  --attention-soft: rgba(244, 170, 92, 0.16);
+  --attention-ink: #ffc58c;
+  --danger-ink: #ffa39a;
+  --danger-soft: rgba(255, 128, 116, 0.13);
+  --info: var(--sky);
+  --info-ink: #acd3fb;
+
+  --dots: radial-gradient(circle at 1px 1px, rgba(167, 243, 208, 0.035) 1px, transparent 1.2px);
+  --field-env: radial-gradient(120% 95% at 50% 18%, #0f271b 0%, #06120c 55%, #020704 100%);
+  --field-env-edge: rgba(2, 7, 4, 0.95);
+
+  --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 12px 32px -20px rgba(0, 0, 0, 0.95);
+  --shadow-2: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 26px 60px -28px rgba(0, 0, 0, 1), 0 0 48px -26px rgba(110, 231, 183, 0.35);
+  --shadow-3: 0 0 0 1px rgba(167, 243, 208, 0.12), 0 40px 90px -40px rgba(0, 0, 0, 1), 0 0 70px -30px rgba(110, 231, 183, 0.3);
+  --overlay: rgba(1, 5, 3, 0.7);
+
+  /* HUD layer (Night) */
+  --glow: rgba(110, 231, 183, 0.55);
+  --glow-soft: rgba(110, 231, 183, 0.16);
+  --hud: rgba(167, 243, 208, 0.58);
+  --hud-dim: rgba(167, 243, 208, 0.22);
+  --edge: linear-gradient(145deg, rgba(167, 243, 208, 0.42), rgba(167, 243, 208, 0.06) 34%, rgba(138, 190, 240, 0.05) 66%, rgba(138, 190, 240, 0.32));
+  --edge-live: linear-gradient(145deg, rgba(110, 231, 183, 0.9), rgba(110, 231, 183, 0.12) 40%, rgba(138, 190, 240, 0.08) 60%, rgba(110, 231, 183, 0.65));
+  --glass: linear-gradient(180deg, rgba(14, 31, 23, 0.86) 0%, rgba(6, 15, 11, 0.92) 100%);
+  --glass-strong: linear-gradient(180deg, rgba(12, 27, 20, 0.96) 0%, rgba(5, 13, 9, 0.97) 100%);
+  --numeral: linear-gradient(180deg, #ffffff 12%, #bdf6dc 96%);
+  --title: linear-gradient(180deg, #ffffff 0%, #d6fbea 55%, #8ee9c1 100%);
+  --scan: repeating-linear-gradient(0deg, rgba(167, 243, 208, 0.03) 0 1px, transparent 1px 3px);
+  --spot: rgba(110, 231, 183, 0.1);
+  --atmo-bg: #030806;
+  --atmo-grid: #6ee7b7;
+  --atmo-beam: #d6fbea;
+  --atmo-strength: 1;
+  --atmo-beams: 1;
+  --atmo-vignette: 1;
+}
