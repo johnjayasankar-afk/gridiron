@@ -1,6 +1,69 @@
 # Verification report
 
-Six builds are recorded here: **0.5.1** first, then **0.5**, **0.4**, **0.3**, **0.2** and the original **0.1** report.
+Seven builds are recorded here: **0.5.2** first, then **0.5.1**, **0.5**, **0.4**, **0.3**, **0.2** and the original **0.1** report.
+
+## Version 0.5.2
+
+Recorded Monday 14 September 2026, late in the evening US Eastern, during the Monday night game. It covers a period when the live deployment showed NFL and college data as unavailable, what that exposed in Gridiron, and the fixes.
+
+### What happened
+
+- On the deployed 0.5.1 site, the slate showed "Provider response: NFL scoreboard: HTTP 403" and "College season could not be read from the provider". Beneath those notices it said "No games on this day.", "No kickoffs found in the next seven days." and "No recent final scores found."
+- HTTP 403 is a refusal: ESPN's servers declined the Vercel function's requests. Nothing in the repository or the deployment had changed. By 8:42 PM the site was reading ESPN again, with no change on Gridiron's side.
+- From this Mac on the same evening, ESPN's site API answered a request with Node's default User-Agent. It refused, with 403, a request with no User-Agent and one with a User-Agent naming Gridiron, so it filters requests at its edge.
+- Why it refused the deployment is not known. Vercel's logs were not available, and ESPN publishes no rules for this unlicensed API. Requests from shared cloud addresses meeting a bot rule is a likely explanation, not a verified one.
+- Gridiron does not disguise its requests to get past a refusal, as the README says under Limits.
+
+### What it exposed in Gridiron
+
+1. **Unknown data was shown as no games.** The notices were right, but the day view, the look ahead and the look back treated a slate the provider never answered as an empty one.
+2. **Failures were cached like successes.** The CDN shared a slate the provider had not answered for 10 seconds, plus 30 of stale reuse. The look ahead remembered a day it could not read as empty for ten minutes.
+3. **A warm function instance kept its first answer.** Nothing polls between requests on Vercel. The engine fetched a day's slate on the first request and never again while the instance stayed warm. An instance that first read the slate during the refusal would keep answering "HTTP 403" after ESPN recovered, and a healthy one kept serving its first scoreboard.
+
+The third was seen on the live site after ESPN recovered:
+
+| Time (US Eastern) | Live site, `/api/slate` | ESPN's scoreboard |
+| --- | --- | --- |
+| 9:12 PM | NFL scoreboard last read at 8:43 PM, shown as connected | |
+| 9:13 PM | Five requests in a row, each answered by the function (`x-vercel-cache: MISS`), all carrying the same 8:43 PM read | DEN at KC, 8:46 in the 2nd, 7 to 7 |
+| 9:13 PM | DEN at KC at 9:21 in the 2nd. The game's own data, `/api/game/nfl-401872931`, was read on request and matched ESPN: 8:41 in the 2nd | 8:41 in the 2nd |
+| 9:19 PM | Scoreboard still last read at 8:43 PM. DEN at KC at 8:41 in the 2nd, updated by that game request rather than a scoreboard read | 6:22 in the 2nd, 7 to 7 |
+
+A viewer's cards on screen still moved, because the page also asks for each visible game every 25 seconds and the newer report wins. The day's list of games, the league notices and freshness come only from the scoreboard read. That is how a refusal could outlast ESPN's recovery.
+
+### The fixes
+
+- **Unknown is not empty.** `shared/availability.ts` treats a league as unknown when it is marked unavailable and has not been read successfully for that day.
+  - The slate then says "Games could not be loaded." or speaks only for the leagues that answered. The summary strip names the unavailable data instead of "Nothing in progress", and the wall does the same.
+  - The look ahead and look back count such a day as a failed lookup, say so, and try again after a minute.
+- **Failures clear quickly.** A slate or game the provider never answered is cached for 2 seconds, with no stale reuse (`server/http.ts`).
+- **Each request refreshes what is due** (`server/engine.ts`). On a serverless deployment:
+  - A request refreshes a league's slate once its polling interval has passed: 25 seconds while games are live or kick off within 45 minutes, 5 minutes otherwise, and 30 minutes for past days. It refreshes a game after 12 seconds.
+  - Both count as due 3 seconds early. Viewers poll on the same cycle, so a request arriving a moment early would otherwise wait out a whole further cycle.
+  - A refused slate is asked for again after 30 seconds, and a failing game at most every 10, so a refusal does not bring a request on every page load.
+  - A persistent Node server keeps its own timers and is unchanged.
+
+### Checks
+
+| Check | Result |
+| --- | --- |
+| Typecheck (`tsc`, strict) | Clean |
+| Unit and integration tests (`npm test`) | **456 passed** in 53 files (0.5.1: 446 in 51). The new tests cover when data counts as unknown, the cache headers on a polled deployment, and a serverless engine: retrying 30 seconds after a refusal and recovering, refreshing a healthy slate on its interval, spacing requests for a failing game, and counting a healthy slate or game as due 3 seconds early |
+| The 3 second allowance set to 0 | The two tests for it failed and the other three passed |
+| `npm run check:serverless -- --live` | Loaded as plain Node modules and answered as version 0.5.2. Today's slate had 1 game, with Kalshi prices. DEN at KC's detail carried 67 Kalshi prices of history. TB at CIN (13 September) came back with 177 plays, 18 drives, 12 scores and 15 team stats |
+| The function on a local server applying the `vercel.json` rewrite, with every ESPN request refused (HTTP 403) and then answered | While refusing, the slate and DEN at KC's game both answered as unavailable, each cached for 2 seconds with no stale reuse (`s-maxage=2`). Once ESPN could answer, a viewer polling every 2 seconds saw the slate recover 31 seconds after the refused read, cached again for 10 seconds with 30 of stale reuse. With DEN at KC live and a request every second, the scoreboard was read again 22 seconds after the previous read |
+| The polled client against that server, in the browser, before the 3 second allowance was added | While refusing, the slate and the wall said games could not be loaded, with the league notices, and nothing was described as absent. After ESPN answered again the page recovered without a reload, in about a minute |
+| End-to-end journeys, production build, replay mode | **67 passed** on the final code: 60 in Chrome and 7 in WebKit |
+| `@cross` journeys in Firefox | **Not run.** Firefox still does not start on this machine (see Version 0.3) |
+
+Design screenshots and performance were not recorded again. The only visual change is the wording when data is unavailable.
+
+### Not verified for 0.5.2
+
+- **Vercel itself.** 0.5.2 has not been deployed. Once it is, while a game is live, `/api/slate` should show the NFL scoreboard read within about half a minute of any request, not at the time of the instance's first request.
+- **The CDN.** The cache headers were checked on a local server, not through Vercel's edge.
+- **The refusal.** It was not seen at its source, and its start is not known; it had ended by 8:42 PM.
+- **A future refusal.** If ESPN refuses the deployment again, 0.5.2 says games could not be loaded and keeps retrying, but it cannot make ESPN answer. A persistent server elsewhere, or a licensed feed, is the durable answer.
 
 ## Version 0.5.1
 

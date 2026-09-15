@@ -1,4 +1,5 @@
 import { ListFilter, PanelRightClose, PanelRightOpen, Rows3, LayoutGrid } from 'lucide-react';
+import { leagueNames, unknownLeagues } from '../../shared/availability';
 import type { Division } from '../../shared/model';
 import { DIVISION_LABEL, isLiveOrPaused } from '../../shared/model';
 import { navigate } from '../app/router';
@@ -99,11 +100,14 @@ export function SummaryStrip({ model }: { model: SlateModel }) {
   const sort = usePrefs((s) => s.sort);
   const density = usePrefs((s) => s.density);
   const railOpen = usePrefs((s) => s.railOpen);
+  const league = usePrefs((s) => s.league);
   const query = useUi((s) => s.slateQuery);
   const wide = useMediaQuery('(min-width: 1280px)');
   const set = usePrefs.getState().set;
 
   const live = model.inScope.filter((g) => isLiveOrPaused(g.status.kind));
+  // a feed that never answered has unknown games, so the strip names it rather than claiming nothing is on
+  const unknown = unknownLeagues(model.world.freshness, league === 'all' ? ['nfl', 'cfb'] : [league]);
   const monitoredIds = new Set([...pinned, ...focusGames, ...model.inScope.filter((g) => isFavoriteGame(g, model.favorites)).map((g) => g.id)]);
   const monitored = model.inScope.filter((g) => monitoredIds.has(g.id)).length;
   const redZone = live.filter((g) => (g.situation?.spot.progress ?? -1) >= 80).length;
@@ -128,7 +132,7 @@ export function SummaryStrip({ model }: { model: SlateModel }) {
             <span className="stat-value">{monitored}</span>
             <span className="stat-label">monitored</span>
           </p>
-          <p className="strip-notable">{notable.length ? notable.join(' · ') : live.length ? 'No notable situations right now' : 'Nothing in progress'}</p>
+          <p className="strip-notable">{notable.length ? notable.join(' · ') : live.length ? 'No notable situations right now' : unknown.length ? `${leagueNames(unknown, true)} data unavailable` : 'Nothing in progress'}</p>
         </div>
         <div className="strip-controls">
           <label className="search-field">

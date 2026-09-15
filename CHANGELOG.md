@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.2
+
+14 September 2026
+
+### Fixed
+
+- **"No games on this day" while ESPN was refusing.** On the evening of 14 September, ESPN's servers refused requests from the Vercel deployment for a while (HTTP 403), then answered again. Gridiron marked NFL and college data unavailable, as it should, but the page beneath the notices still said "No games on this day.", "No kickoffs found in the next seven days." and "No recent final scores found." Those games were unknown, not absent.
+  - When a league's feed has not answered for the day, the slate says "Games could not be loaded." (or speaks only for the leagues that did answer), the summary strip names the unavailable data instead of "Nothing in progress", and the wall does the same.
+  - Looking ahead for kickoffs and back for results counts a day the provider did not answer for as a failed lookup, says so, and asks again after a minute instead of remembering the day as empty for ten.
+- **Failures clear sooner on Vercel.** A slate or game the provider never answered for is shared by the CDN for 2 seconds, without stale reuse, instead of 10 seconds plus 30 of stale reuse, so a recovery reaches viewers at once.
+- **A warm Vercel instance kept its first answer.** Nothing polls between requests on Vercel, and a function instance that had already fetched a day's slate never fetched it again while it stayed warm. After ESPN's refusal, such an instance kept answering "unavailable" even once ESPN answered again, and a healthy one could keep serving its first scoreboard. On the evening of 14 September the live site answered, during the game, with a scoreboard it had last read 30 minutes earlier.
+  - A request now refreshes a slate once its polling interval has passed: 25 seconds while games are live or kick off within 45 minutes, 5 minutes otherwise, and 30 minutes for past days. A game is refreshed after 12 seconds, as before.
+  - Both count as due 3 seconds early. Viewers poll on the same cycle, so a request arriving a moment early would otherwise wait out a whole further cycle, and a single viewer could see only every other update.
+  - A refused slate is asked for again after 30 seconds, and a failing game at most every 10 seconds, so a refusal is not answered with a request on every page load.
+
 ## 0.5.1
 
 14 September 2026

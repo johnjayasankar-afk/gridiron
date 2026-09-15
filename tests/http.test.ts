@@ -89,3 +89,50 @@ describe('http compression and static files', () => {
     expect(small.headers['content-encoding']).toBeUndefined();
   });
 });
+
+describe('polled deployments and the CDN', () => {
+  let pollServer: Server;
+  let pollBase = '';
+  const refused = { lastAttemptAt: '2026-09-15T00:10:00.000Z', lastSuccessAt: null, lastChangeAt: null, health: 'unavailable', error: 'NFL scoreboard: HTTP 403', consecutiveFailures: 1 };
+  const answered = { lastAttemptAt: '2026-09-15T00:10:00.000Z', lastSuccessAt: '2026-09-15T00:10:00.000Z', lastChangeAt: null, health: 'connected', error: null, consecutiveFailures: 0 };
+
+  beforeAll(async () => {
+    const engine = {
+      mode: 'live',
+      providerInfo: { id: 'test' },
+      today: () => '20260914',
+      stats: () => ({}),
+      getSlate: async (date: string) => ({ date, games: [], freshness: date === '20260914' ? { nfl: refused, cfb: refused } : { nfl: answered, cfb: answered } }),
+      getDetail: async (id: string) => (id === 'nfl-401872931' ? { version: 0, detail: null, freshness: refused } : { version: 3, detail: { gameId: id }, freshness: answered }),
+    } as unknown as GridironEngine;
+    const handler = createApp({ engine, replay: null, staticDir: null, maxStreams: 0, version: 'test', fetcherStats: () => ({}), startedAt: Date.now(), transport: 'poll' });
+    pollServer = createServer((req, res) => void handler(req, res));
+    await new Promise<void>((resolve) => pollServer.listen(0, '127.0.0.1', resolve));
+    const address = pollServer.address();
+    pollBase = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+  });
+
+  afterAll(() => {
+    pollServer?.close();
+  });
+
+  const cacheControl = (path: string) =>
+    new Promise<string | undefined>((resolve, reject) => {
+      const req = request(`${pollBase}${path}`, (res) => {
+        res.resume();
+        res.on('end', () => resolve(res.headers['cache-control']));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+
+  it('lets the CDN share an answered slate or game for its full lifetime, with stale reuse', async () => {
+    expect(await cacheControl('/api/slate?date=20260913')).toBe('public, max-age=0, s-maxage=10, stale-while-revalidate=30');
+    expect(await cacheControl('/api/game/nfl-401872926')).toBe('public, max-age=0, s-maxage=8, stale-while-revalidate=24');
+  });
+
+  it('shares a slate or game the provider never answered for only briefly, so a recovery shows at once', async () => {
+    expect(await cacheControl('/api/slate?date=20260914')).toBe('public, max-age=0, s-maxage=2');
+    expect(await cacheControl('/api/game/nfl-401872931')).toBe('public, max-age=0, s-maxage=2');
+  });
+});

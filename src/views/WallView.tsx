@@ -1,6 +1,7 @@
 /** The wall: a full-screen grid of 4, 9 or 16 games for a second screen, with an optional Director hero tile. */
 import { Maximize, Minimize, Radio, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { leagueNames, unknownLeagues } from '../../shared/availability';
 import type { GameSummary } from '../../shared/model';
 import { navigate } from '../app/router';
 import { DirectorRibbon, nextKickoff } from '../components/DirectorRibbon';
@@ -19,6 +20,9 @@ const HERO_CELLS: Record<WallSize, number> = { 4: 2, 9: 4, 16: 4 };
 
 export function WallView() {
   const model = useSlateModel();
+  const league = usePrefs((s) => s.league);
+  // a feed that never answered leaves its games unknown, so the wall never calls the day empty for it
+  const unknown = unknownLeagues(model.world.freshness, league === 'all' ? ['nfl', 'cfb'] : [league]);
   const wallSize = usePrefs((s) => s.wallSize);
   const density = usePrefs((s) => s.density);
   const focusGames = usePrefs((s) => s.focusGames);
@@ -115,7 +119,11 @@ export function WallView() {
       ) : !model.world.loaded ? (
         <div className="wall-empty">Connecting to the live feed.</div>
       ) : ordered.length === 0 && !showHero ? (
-        <div className="wall-empty">No games on this day. Exit the wall to pick another day or open the replay lab.</div>
+        <div className="wall-empty">
+          {unknown.length
+            ? `Games could not be loaded: ${leagueNames(unknown)} data is unavailable right now. Nothing is filled in while Gridiron retries.`
+            : 'No games on this day. Exit the wall to pick another day or open the replay lab.'}
+        </div>
       ) : (
         <div className="wall-grid">
           {showHero && (

@@ -158,9 +158,9 @@ Running several instances works, but each one polls separately, and watch partie
 
 - Every `/api/...` request reaches the one function through a rewrite in `vercel.json` that carries the original path, and the function restores it before routing. Outside Next.js, Vercel does not treat a `[...path]` file as a catch-all: in 0.5, game detail and team pages got Vercel's own 404.
 - The client polls instead of streaming (`/api/health` reports `transport: "poll"`).
-- Nothing polls in the background. Each request fetches what it needs within the fetcher's time budget.
+- Nothing polls in the background. Each request fetches what it needs within the fetcher's time budget. A request refreshes a slate once its polling interval has passed and a game after 12 seconds, both counted 3 seconds early because viewers poll on the same cycle. It asks again for a refused slate after 30 seconds, and for a failing game at most every 10 seconds.
 - Kalshi prices are read when a slate is requested, and a game's Kalshi price history when its detail is, waiting at most 3 seconds each.
-- Responses are cached at the edge: slates for 10 seconds, games for 8 and team pages for 60. Concurrent viewers share provider requests.
+- Responses are cached at the edge: slates for 10 seconds, games for 8 and team pages for 60. Concurrent viewers share provider requests. A slate or game the provider did not answer for is cached for 2 seconds, so a recovery shows at once.
 - The replay lab, watch parties and push alerts are not offered. The empty state and Alert settings say so, and the header leaves out the watch party button.
 
 Deploy with the Vercel CLI or dashboard. Framework preset: Other. The build and output settings come from `vercel.json`, and no environment variables are needed.
@@ -197,6 +197,7 @@ Limits to know:
 - **College play-by-play is incomplete.** Many games, especially outside FBS, have scores only. Their cards say "Score-only coverage", and they have no win probability.
 - Team stats, drives and broadcasts can be missing or late.
 - The provider has its own delay. None of this is official real-time tracking.
+- ESPN can refuse requests. On 14 September 2026 it answered the Vercel deployment with HTTP 403 for a while, then recovered on its own, while answering other connections normally. Gridiron shows such a day as data unavailable, never as a day without games, and keeps retrying. It does not disguise its requests to get around a refusal.
 - No live provider reports where the ball is across the field, so live fields keep the ball on the centre axis.
 - Team records, ranks and standings are reported only as of today. The team documents' own bye week field was found to be unreliable, so bye weeks come from gaps in the reported week numbers.
 - Nothing was live while odds and win probability were built. Whether ESPN updates sportsbook lines during a game, and whether its scoreboard carries the last play's win probability, could not be observed. Gridiron calls in-game lines "the latest lines reported", and without a scoreboard value a card shows win probability once the game's detail has loaded.

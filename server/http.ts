@@ -7,6 +7,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { anyFeedUnknown, feedUnknown } from '../shared/availability.js';
 import type { Division, LeagueId } from '../shared/model.js';
 import { parseGameId } from '../shared/model.js';
 import { teamPageAtReplay } from '../shared/team.js';
@@ -120,8 +121,11 @@ export function createApp(options: AppOptions) {
     const path = url.pathname.slice(base.length) || '/';
 
     // Polled deployments let a CDN share each response briefly, so concurrent viewers reuse one provider request.
-    const pollCache = (seconds: number): Record<string, string> =>
-      options.transport === 'poll' && !replaySession ? { 'cache-control': `public, max-age=0, s-maxage=${seconds}, stale-while-revalidate=${seconds * 3}` } : {};
+    // A response the provider never answered for is shared for 2 seconds without stale reuse, so a recovery shows at once.
+    const pollCache = (seconds: number, unknown = false): Record<string, string> =>
+      options.transport === 'poll' && !replaySession
+        ? { 'cache-control': unknown ? 'public, max-age=0, s-maxage=2' : `public, max-age=0, s-maxage=${seconds}, stale-while-revalidate=${seconds * 3}` }
+        : {};
     if (options.transport === 'poll' && (path === '/interest' || path === '/stream')) {
       return send(res, 404, { error: 'This deployment is polled; the live stream is not available' });
     }
@@ -129,14 +133,16 @@ export function createApp(options: AppOptions) {
     if (req.method === 'GET' && path === '/slate') {
       const date = url.searchParams.get('date');
       const key = isDateKey(date) ? date : engine.today();
-      return send(res, 200, await engine.getSlate(key), pollCache(10));
+      const slate = await engine.getSlate(key);
+      return send(res, 200, slate, pollCache(10, anyFeedUnknown(slate.freshness)));
     }
 
     const game = /^\/game\/([^/]+)$/.exec(path);
     if (req.method === 'GET' && game) {
       const id = decodeURIComponent(game[1]);
       if (!parseGameId(id)) return send(res, 400, { error: 'Invalid game id' });
-      return send(res, 200, await engine.getDetail(id), pollCache(8));
+      const detail = await engine.getDetail(id);
+      return send(res, 200, detail, pollCache(8, !detail.detail && feedUnknown(detail.freshness)));
     }
 
     const team = /^\/team\/([^/]+)$/.exec(path);

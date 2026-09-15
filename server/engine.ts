@@ -159,6 +159,14 @@ export interface EngineOptions {
   marketHistory?: (game: GameSummary) => Promise<MarketHistory | null>;
 }
 
+/** Serverless deployments: how long a failed league or game waits before a request asks the provider again. */
+const ON_DEMAND_RETRY_MS = { slate: 30_000, detail: 10_000 };
+/**
+ * Serverless deployments: a healthy slate or game counts as due this much before its polling interval. Viewers poll on the
+ * same cycle as those intervals, so a request arriving a moment early would otherwise wait out a whole further cycle.
+ */
+const ON_DEMAND_EARLY_MS = 3_000;
+
 const iso = (ms: number) => new Date(ms).toISOString();
 
 const newLeague = (): LeagueSlate => ({
@@ -385,9 +393,11 @@ export class GridironEngine {
   async getSlate(date: string, waitMs = 10_000): Promise<SlateSnapshot> {
     const day = this.ensureDay(date);
     day.lastRequested = this.now();
-    if (!day.leagues.nfl.fetched || !day.leagues.cfb.fetched) {
-      await withTimeout(Promise.all([this.refreshLeague('nfl', date), this.refreshLeague('cfb', date)]), waitMs);
-    }
+    // A running engine keeps its slates fresh on a timer. Nothing polls between requests on a serverless deployment,
+    // so there a request refreshes each league whose last attempt is older than its polling interval.
+    const unfetched = !day.leagues.nfl.fetched || !day.leagues.cfb.fetched;
+    const due: LeagueId[] = unfetched ? ['nfl', 'cfb'] : this.running ? [] : (['nfl', 'cfb'] as const).filter((league) => this.dueOnDemand(day, league));
+    if (due.length) await withTimeout(Promise.all(due.map((league) => this.refreshLeague(league, date))), waitMs);
     if (this.marketReader) {
       const games = [...day.leagues.nfl.games.values(), ...day.leagues.cfb.games.values()];
       const prices = await withTimeout(
@@ -407,7 +417,12 @@ export class GridironEngine {
     const entry = this.ensureDetail(gameId);
     entry.lastRequested = this.now();
     const age = entry.freshness.lastSuccessAt ? this.now() - Date.parse(entry.freshness.lastSuccessAt) : Infinity;
-    if (!entry.detail || age > this.intervals.detailFocus) await withTimeout(this.refreshDetail(gameId), waitMs);
+    const sinceAttempt = entry.freshness.lastAttemptAt ? this.now() - Date.parse(entry.freshness.lastAttemptAt) : Infinity;
+    // on a serverless deployment a failing game is asked for again at most every 10 seconds, not on every request,
+    // and a healthy one a little before 12 seconds, the interval at which the client asks for a game in focus
+    const spaced = this.running || !entry.failures || sinceAttempt >= ON_DEMAND_RETRY_MS.detail;
+    const stale = age > this.intervals.detailFocus - (this.running ? 0 : ON_DEMAND_EARLY_MS);
+    if ((!entry.detail || stale) && spaced) await withTimeout(this.refreshDetail(gameId), waitMs);
     // A serverless function may stop once it answers, so the price history is read before answering, briefly.
     if (this.historyReader && entry.detail) await withTimeout(this.refreshHistory(gameId), 3_000);
     return { version: entry.version, detail: entry.detail, freshness: entry.freshness };
@@ -850,6 +865,19 @@ export class GridironEngine {
     }
   }
 
+  /** How often a day's slate is polled while it is healthy: live, idle, or a past day. */
+  private slateInterval(day: DaySlate): number {
+    if (this.hasActive(day) || this.hasImminent(day)) return this.intervals.slateLive;
+    return day.date < this.todayKey() ? this.intervals.slatePast : this.intervals.slateIdle;
+  }
+
+  /** Serverless deployments: whether a request should ask the provider for a league again. */
+  private dueOnDemand(day: DaySlate, league: LeagueId): boolean {
+    const slate = day.leagues[league];
+    const since = slate.freshness.lastAttemptAt ? this.now() - Date.parse(slate.freshness.lastAttemptAt) : Infinity;
+    return since >= (slate.failures ? ON_DEMAND_RETRY_MS.slate : this.slateInterval(day) - ON_DEMAND_EARLY_MS);
+  }
+
   /** Milliseconds until a task should run again, or null when it is no longer needed. */
   intervalFor(key: string): number | null {
     const [kind, a, b] = key.split('|');
@@ -858,9 +886,7 @@ export class GridironEngine {
       if (!this.activeDates().has(date)) return null;
       const day = this.ensureDay(date);
       const failures = day.leagues[a as LeagueId].failures;
-      let base = this.intervals.slateIdle;
-      if (this.hasActive(day) || this.hasImminent(day)) base = this.intervals.slateLive;
-      else if (date < this.todayKey()) base = this.intervals.slatePast;
+      const base = this.slateInterval(day);
       return failures ? Math.min(5 * 60_000, base * 2 ** Math.min(failures, 4)) : base;
     }
     const id = a;

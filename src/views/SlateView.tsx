@@ -1,6 +1,7 @@
 /** The slate: live games first, then upcoming and final, with an honest empty day. */
 import { FlaskConical, TriangleAlert } from 'lucide-react';
 import { useEffect } from 'react';
+import { leagueNames, unknownLeagues } from '../../shared/availability';
 import { statusShort } from '../../shared/format';
 import type { GameSummary, LeagueId } from '../../shared/model';
 import { LEAGUES } from '../../shared/model';
@@ -80,20 +81,39 @@ function QuietDay({ model, noGames }: { model: SlateModel; noGames: boolean }) {
   const today = useLive((s) => s.hello?.today ?? null);
   const source = useLive((s) => s.source);
   const replayAvailable = useLive((s) => s.health?.replayAvailable ?? true);
+  const league = usePrefs((s) => s.league);
+  const leagues: LeagueId[] = league === 'all' ? ['nfl', 'cfb'] : [league];
+  // a feed that never answered leaves its games unknown, so the headline speaks only for the leagues that did
+  const unknown = unknownLeagues(model.world.freshness, leagues);
+  const known = leagues.filter((l) => !unknown.includes(l));
   const date = model.world.date ?? today;
   const upcomingHere = model.sections.upcoming.length > 0;
   const finalHere = model.sections.final.length > 0;
-  const look = useLookaround(true, date, { ahead: !upcomingHere, behind: !finalHere });
+  const look = useLookaround(true, date, { ahead: !upcomingHere, behind: !finalHere, leagues });
+  const title = !unknown.length
+    ? noGames
+      ? 'No games on this day.'
+      : 'No games are live right now.'
+    : !known.length
+      ? 'Games could not be loaded.'
+      : noGames
+        ? `No ${leagueNames(known)} games on this day.`
+        : `No ${leagueNames(known)} games are live right now.`;
+  const text = unknown.length
+    ? known.length
+      ? `${leagueNames(unknown, true)} data is unavailable right now, so ${leagueNames(unknown)} games are not shown. Nothing is filled in while Gridiron retries.`
+      : `${leagueNames(unknown, true)} data is unavailable right now, so Gridiron cannot tell which games are on. Nothing is filled in while it retries.`
+    : source.kind === 'replay'
+      ? 'The replay has not reached kickoff yet. Press play in the replay bar.'
+      : 'Gridiron shows a game as live only when the provider reports it in progress. Nothing here is simulated.';
   return (
     <section className="quiet" aria-labelledby="quiet-title">
       <div className="quiet-main">
         <p className="eyebrow">{date ? dateKeyToLabel(date, { weekday: 'long', month: 'long', day: 'numeric' }) : 'Today'}</p>
         <h1 id="quiet-title" className="quiet-title">
-          {noGames ? 'No games on this day.' : 'No games are live right now.'}
+          {title}
         </h1>
-        <p className="quiet-text">
-          {source.kind === 'replay' ? 'The replay has not reached kickoff yet. Press play in the replay bar.' : 'Gridiron shows a game as live only when the provider reports it in progress. Nothing here is simulated.'}
-        </p>
+        <p className="quiet-text">{text}</p>
       </div>
       <div className="quiet-columns">
         <div className="quiet-block">
@@ -108,7 +128,7 @@ function QuietDay({ model, noGames }: { model: SlateModel; noGames: boolean }) {
               <MiniList games={look.upcoming.games} />
             </>
           ) : (
-            <p className="muted">{look.failed ? 'The upcoming schedule could not be loaded.' : 'No kickoffs found in the next seven days.'}</p>
+            <p className="muted">{look.aheadFailed ? 'The upcoming schedule could not be loaded.' : 'No kickoffs found in the next seven days.'}</p>
           )}
         </div>
         <div className="quiet-block">
@@ -125,7 +145,7 @@ function QuietDay({ model, noGames }: { model: SlateModel; noGames: boolean }) {
               <MiniList games={look.recent.games} />
             </>
           ) : (
-            <p className="muted">No recent final scores found.</p>
+            <p className="muted">{look.behindFailed ? 'Recent results could not be loaded.' : 'No recent final scores found.'}</p>
           )}
         </div>
         <div className="quiet-block quiet-demo">
