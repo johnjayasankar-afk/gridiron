@@ -23,3 +23,17 @@ export interface PointerState {
 }
 
 export const createPointerState = (): PointerState => ({ x: 0, y: 0, active: false });
+
+/**
+ * Where the ball is, shared between the layer that draws it and the camera that
+ * watches it, as a plain mutable object for the same reason the pointer is one:
+ * it changes sixty times a second and must never re-render React to do it.
+ */
+export interface BallTrack {
+  /** World x of the ball. */
+  x: number;
+  /** True only while the ball is running a play, rather than sitting at a spot. */
+  live: boolean;
+}
+
+export const createBallTrack = (): BallTrack => ({ x: 0, live: false });

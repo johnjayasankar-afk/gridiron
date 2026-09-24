@@ -4,7 +4,7 @@
  * favorite teams. Live data under /api is never cached here, so scores are
  * always current or honestly unavailable.
  */
-const VERSION = 'gridiron-0.5.0';
+const VERSION = 'gridiron-0.6.0';
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/theme-init.js'];
 const MAX_ASSETS = 80;
 

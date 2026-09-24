@@ -71,4 +71,58 @@ test('game page camera and replay stay within budget', async ({ page }) => {
   const info = await page.evaluate(() => window.__gridironGraphics?.info());
   writeFileSync('docs/perf-game.json', `${JSON.stringify({ recordedAt: new Date().toISOString(), environment: 'Production build, replay mode, game page at 1440x900 with drive replay playing and camera presets cycling', info }, null, 2)}\n`);
   expect(info?.views).toBe(1);
+  /*
+   * The arena around the field is decoration, and decoration has to stay cheap.
+   * These are ceilings with room above what is there, not a snapshot of it: they
+   * are here to catch a change that doubles the cost of the bowl, not to make
+   * every tweak to it fail.
+   */
+  expect(info!.calls, 'draw calls on the game page').toBeLessThanOrEqual(45);
+  expect(info!.triangles, 'triangles on the game page').toBeLessThanOrEqual(6500);
+});
+
+/**
+ * Weather is the one thing on the field that never stops.
+ *
+ * Everything else is drawn on demand: a still page renders no frames at all. Snow
+ * falling has to keep asking for them, so a game the provider reports snow for is
+ * a game page rendering continuously, and that cost is measured rather than
+ * assumed. It is one draw call, and what it is being watched for is the frame it
+ * takes and the frames it asks for.
+ */
+test('weather on the field costs one draw call and keeps its frame cheap', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReplay(page, { path: '/game/nfl-401872925', scenario: 'test-weather', at: 0.4 });
+  await expect.poll(() => page.evaluate(() => window.__gridironField?.()?.sky?.kind ?? null), { timeout: 20_000 }).toBe('snow');
+  await page.waitForTimeout(3000);
+
+  const frames = await page.evaluate(
+    () =>
+      new Promise<{ count: number; p50: number; p99: number }>((resolve) => {
+        const times: number[] = [];
+        let last = performance.now();
+        const tick = () => {
+          const now = performance.now();
+          times.push(now - last);
+          last = now;
+          if (times.length < 240) requestAnimationFrame(tick);
+          else {
+            const sorted = [...times].sort((a, b) => a - b);
+            resolve({ count: times.length, p50: sorted[Math.floor(sorted.length * 0.5)], p99: sorted[Math.floor(sorted.length * 0.99)] });
+          }
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  const info = await page.evaluate(() => window.__gridironGraphics?.info());
+  writeFileSync(
+    'docs/perf-weather.json',
+    `${JSON.stringify({ recordedAt: new Date().toISOString(), environment: 'Production build, replay mode, game page at 1440x900 with snow falling (test-weather synthetic scenario)', info, frames }, null, 2)}
+`,
+  );
+  // One more draw call than the same page in the dry, and one geometry.
+  expect(info!.calls, 'draw calls with weather on the field').toBeLessThanOrEqual(46);
+  // Snow moves entirely in the vertex shader, so a frame is not doing work per drop on the CPU.
+  expect(frames.p99, 'the slowest frames while it snows').toBeLessThanOrEqual(34);
 });

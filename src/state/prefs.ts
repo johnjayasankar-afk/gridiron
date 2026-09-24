@@ -89,6 +89,8 @@ export interface PrefsData {
   snoozeUntil: number | null;
   quiet: boolean;
   sound: boolean;
+  /** Short sounds for what happens on the field, on a game page only. Off by default. */
+  fieldSound: boolean;
   notifications: boolean;
   announce: AlertKind[];
   push: PushPrefs;
@@ -128,6 +130,7 @@ export const DEFAULT_PREFS: PrefsData = {
   snoozeUntil: null,
   quiet: false,
   sound: false,
+  fieldSound: false,
   notifications: false,
   announce: ['touchdown', 'turnover', 'final'],
   push: { enabled: false, kinds: [...DEFAULT_PUSH_KINDS] },

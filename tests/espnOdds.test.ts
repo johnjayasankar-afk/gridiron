@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newDiagnostics, normalizeScoreboardEvent, normalizeSummary } from '../server/providers/espn/normalize';
-import { lastPlayWinProbability, normalizeLines, normalizePredictor, normalizeWinProbability } from '../server/providers/espn/odds';
+import { lastPlayWinProbability, normalizeCoreOdds, normalizeLines, normalizePredictor, normalizeWinProbability } from '../server/providers/espn/odds';
 import { fixture } from './helpers/fixtures';
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -69,5 +69,49 @@ describe('ESPN lines, win probability and matchup predictor', () => {
     expect(lastPlayWinProbability({ id: '77', probability: { homeWinPercentage: 0.31, tiePercentage: 0.01 } }, 'nfl-1')).toEqual({ home: 0.31, tie: 0.01, playId: 'nfl-1:77', source: 'ESPN' });
     expect(lastPlayWinProbability({ id: '77' }, 'nfl-1')).toBeNull();
     expect(normalizePredictor({ homeTeam: { id: '12', gameProjection: '59.6' }, awayTeam: { id: '99', gameProjection: '40.1' } }, '12', '7')).toBeNull();
+  });
+});
+
+/**
+ * The core API's odds document is the only place the line a book is offering
+ * during a game appears. The scoreboard and the summary carry an opening line
+ * and a closing one, and while a game runs there is no closing line yet.
+ */
+describe("the sportsbook's live line, from ESPN's core API", () => {
+  const pregame = () => fixture<Raw>('odds/nfl-401872948-core-odds-pregame.json');
+  const final = () => fixture<Raw>('odds/nfl-401872926-core-odds-final.json');
+
+  it('reads the line the book is offering now, alongside the one it opened at', () => {
+    const lines = normalizeCoreOdds(pregame(), '9', '1')!;
+    expect(lines.provider).toBe('DraftKings');
+    expect(lines.details).toBe('GB -4.5');
+    expect(lines.favorite).toBe('home');
+    // A spread is a line and the price on it is a price; both arrive as "american" strings.
+    expect(lines.spread!.home).toEqual({ open: { line: -7.5, odds: -110 }, latest: { line: -4.5, odds: -115 } });
+    expect(lines.spread!.away).toEqual({ open: { line: 7.5, odds: -110 }, latest: { line: 4.5, odds: -105 } });
+    expect(lines.moneyline!.home).toEqual({ open: -360, latest: -245 });
+    expect(lines.total!.over).toEqual({ open: { line: 46.5, odds: -110 }, latest: { line: 42.5, odds: -118 } });
+    expect(lines.total!.under.latest).toEqual({ line: 42.5, odds: -102 });
+  });
+
+  it('falls back to the close once a game is over, which is where the live line stopped', () => {
+    const lines = normalizeCoreOdds(final(), '24', '22')!;
+    expect(lines.spread!.home).toEqual({ open: { line: -11.5, odds: -110 }, latest: { line: -8.5, odds: -120 } });
+    expect(lines.moneyline!.away).toEqual({ open: 470, latest: 370 });
+    expect(lines.total!.over.latest).toEqual({ line: 47.5, odds: -102 });
+  });
+
+  it('reads a document whose teams are the other way round, and refuses one for another game', () => {
+    const swapped = normalizeCoreOdds(pregame(), '1', '9')!;
+    expect(swapped.spread!.home.latest).toEqual({ line: 4.5, odds: -105 });
+    expect(swapped.spread!.away.latest).toEqual({ line: -4.5, odds: -115 });
+    expect(swapped.favorite).toBe('away');
+    expect(normalizeCoreOdds(pregame(), '77', '78')).toBeNull();
+  });
+
+  it('has nothing to say about an empty or malformed document rather than inventing a line', () => {
+    expect(normalizeCoreOdds({ items: [] }, '9', '1')).toBeNull();
+    expect(normalizeCoreOdds({ items: [{ provider: { name: 'Book', priority: 1 } }] }, '9', '1')).toBeNull();
+    expect(normalizeCoreOdds(null, '9', '1')).toBeNull();
   });
 });

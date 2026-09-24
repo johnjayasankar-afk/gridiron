@@ -1,0 +1,21 @@
+# Gridiron
+
+> Every game, every drive, one view. A live football command centre: scores, win
+> probability, drive charts and a field diagram for each game, with the moments that
+> matter surfaced as they happen.
+
+Every spot, clock and chance comes from a source that reported it. A missing ball
+spot says so; it is never guessed to midfield.
+
+## What it shows
+
+- A card per game: score, possession, down and distance, red zone, and the field.
+- Win probability and the published lines beside it, each named with its source.
+- Moments: scoring plays, big plays and fourth-down stops, as they are reported.
+- Watch next: the games where a tying or go-ahead chance is live right now.
+
+## Elsewhere
+
+- [Labs](https://labs.johnjayasankar.com/)
+- [Case study](https://johnjayasankar.com/work/gridiron)
+- Contact: johnjayasankar@gmail.com

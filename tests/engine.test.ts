@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GameDetail, GameSummary, LeagueId } from '../shared/model';
+import type { GameDetail, GameSummary, LeagueId, LineHistory } from '../shared/model';
 import { GridironEngine, type ClientInterest, type EngineMessage } from '../server/engine';
 import type { DetailResult, SlateResult, SportsProvider } from '../server/providers/types';
-import { detail, game, play } from './helpers/builders';
+import { bettingLines, detail, game, play } from './helpers/builders';
 
 const TODAY = '20260914';
 const YESTERDAY = '20260913';
@@ -181,6 +181,73 @@ describe('GridironEngine', () => {
     e.connect('b', interest({ focus: ['nfl-3'] }), (m) => b.push(m));
     const full = b.find((m) => m.type === 'detail') as Extract<EngineMessage, { type: 'detail' }>;
     expect((full.detail as GameDetail).plays).toHaveLength(2);
+  });
+
+  it('writes down the sportsbook line it is given, and only when the line moved', async () => {
+    const f = fakeProvider();
+    /*
+     * The provider reports an opening line and a latest one with no times on
+     * them, so a line at a play can only come from Gridiron's own record of what
+     * it was told and when. This is that record being kept.
+     */
+    let lines = bettingLines(-3.5, 47.5, -180, 155);
+    const g = () => game({ id: 'nfl-4', lines });
+    f.setSlate(async (league) => ({ games: league === 'nfl' ? [g()] : [] }));
+    f.setDetail(async () => ({ ok: true, detail: detail(g(), [play({ n: 1, gameId: 'nfl-4' })]), receivedAt: Date.now() }));
+    const e = make(f.provider);
+    let client = 0;
+    /** What a client joining now would be sent as the whole detail. */
+    const held = async () => {
+      const seen: EngineMessage[] = [];
+      e.connect(`c${client++}`, interest({ focus: ['nfl-4'] }), (m) => seen.push(m));
+      await vi.advanceTimersByTimeAsync(0);
+      return ((seen.find((m) => m.type === 'detail') as Extract<EngineMessage, { type: 'detail' }>).detail as GameDetail).lineHistory!;
+    };
+    await e.refreshDetail('nfl-4');
+    const first = await held();
+    expect(first.points).toHaveLength(1);
+    expect(first.points[0].spreadHome).toBe(-3.5);
+
+    // The same line again is not a second reading, whatever time it arrives at.
+    await vi.advanceTimersByTimeAsync(30_000);
+    await e.refreshDetail('nfl-4');
+    expect((await held()).points).toHaveLength(1);
+
+    lines = bettingLines(-6.5, 45.5, -260, 215);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await e.refreshDetail('nfl-4');
+    const moved = await held();
+    expect(moved.points).toHaveLength(2);
+    expect(moved.points[1].spreadHome).toBe(-6.5);
+    expect(moved.points[1].moneylineAway).toBe(215);
+    // Each reading carries the time it was taken, which is the whole point of keeping it.
+    expect(Date.parse(moved.points[1].at)).toBeGreaterThan(Date.parse(moved.points[0].at));
+  });
+
+  /*
+   * In the replay lab the engine keeps no record of its own, because a reading
+   * taken now would be stamped with today while the plays carry the original
+   * Sunday. What it must not do is erase the recording the lab itself supplies,
+   * which is a real one from when that game ran, cut at the replay clock.
+   */
+  it('keeps no line record of its own in the replay lab, and passes the lab\'s own recording through', async () => {
+    const f = fakeProvider();
+    const g = game({ id: 'nfl-4', lines: bettingLines(-3.5, 47.5, -180, 155) });
+    const captured: LineHistory = { provider: 'Book', captured: true, points: [{ at: '2026-09-13T17:00:00.000Z', spreadHome: -3.5, spreadAway: 3.5, spreadOddsHome: -110, spreadOddsAway: -110, total: 47.5, totalOddsOver: -110, totalOddsUnder: -110, moneylineHome: -180, moneylineAway: 155 }] };
+    f.setSlate(async (league) => ({ games: league === 'nfl' ? [g] : [] }));
+    f.setDetail(async () => ({ ok: true, detail: { ...detail(g, [play({ n: 1, gameId: 'nfl-4' })]), lineHistory: captured }, receivedAt: Date.now() }));
+    engine = new GridironEngine({ provider: f.provider, mode: 'replay', today: () => TODAY, random: () => 0.5 });
+    engine.start();
+    const seen: EngineMessage[] = [];
+    engine.connect('a', interest({ focus: ['nfl-4'] }), (m) => seen.push(m));
+    await engine.refreshDetail('nfl-4');
+    await vi.advanceTimersByTimeAsync(0);
+    const full = seen.find((m) => m.type === 'detail') as Extract<EngineMessage, { type: 'detail' }>;
+    const served = (full.detail as GameDetail).lineHistory!;
+    expect(served.captured).toBe(true);
+    expect(served.points).toHaveLength(1);
+    // Nothing stamped with today, which is what recording here would have added.
+    expect(served.points.every((p) => p.at.startsWith('2026-09-13'))).toBe(true);
   });
 
   it("keeps polling yesterday while one of its games runs past midnight, then lets it go", async () => {

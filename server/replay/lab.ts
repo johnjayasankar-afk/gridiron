@@ -10,8 +10,8 @@ import type { ReplayCommand, ReplayHub, ReplaySessionInfo } from '../http.js';
 import { newDiagnostics, normalizeScoreboardEvent, normalizeSummary } from '../providers/espn/normalize.js';
 import type { DetailResult, ProviderInfo, SlateOptions, SlateResult, SportsProvider } from '../providers/types.js';
 import { detailWithLateral, lateralsFor, summaryWithLateral } from './lateral.js';
-import { FixtureStore, SCENARIOS, withCapturedMarket, type BuiltScenario, type ScenarioDef } from './scenarios.js';
-import { marketAt, marketHistoryAt, scoreboardEventAt, summaryAt, visiblePlays, type GameTimeline } from './timeline.js';
+import { FixtureStore, SCENARIOS, withCapturedLines, withCapturedMarket, type BuiltScenario, type ScenarioDef } from './scenarios.js';
+import { lineHistoryAt, linesAt, marketAt, marketHistoryAt, scoreboardEventAt, summaryAt, visiblePlays, type GameTimeline } from './timeline.js';
 
 export const REPLAY_INTERVALS: Partial<PollIntervals> = {
   slateLive: 2_000,
@@ -143,8 +143,10 @@ export class ReplayProvider implements SportsProvider {
         // Only the lateral position test scenario decorates its summaries.
         const laterals = summary ? lateralsFor(g) : null;
         const decorated = summary && laterals ? summaryWithLateral(summary, laterals, latestPlayId(g, tv)) : summary;
-        // Captured exchange prices, as a live reader would have shown them at this moment.
-        return decorated && g.market ? { ...decorated, market: marketAt(g, tv) } : decorated;
+        // Captured exchange prices and the recorded book line, as a live reader would have shown them at this moment.
+        if (!decorated) return decorated;
+        const lines = g.lines ? linesAt(g, tv) : null;
+        return g.market || lines ? { ...decorated, ...(g.market ? { market: marketAt(g, tv) } : {}), ...(lines ? { lines } : {}) } : decorated;
       })
       .filter((g): g is GameSummary => g !== null);
     const divisions: DivisionCoverage[] =
@@ -164,8 +166,19 @@ export class ReplayProvider implements SportsProvider {
     if (!detail) return { ok: false, error: { scope: 'Game detail', message: 'Replay summary could not be read', status: null }, receivedAt };
     const laterals = lateralsFor(tl);
     const decorated = laterals ? detailWithLateral(detail, laterals) : detail;
-    if (!tl.market) return { ok: true, detail: decorated, receivedAt };
-    return { ok: true, detail: { ...decorated, summary: { ...decorated.summary, market: marketAt(tl, tv) }, marketHistory: marketHistoryAt(tl, tv) }, receivedAt };
+    const lines = tl.lines ? linesAt(tl, tv) : null;
+    if (!tl.market && !lines) return { ok: true, detail: decorated, receivedAt };
+    return {
+      ok: true,
+      detail: {
+        ...decorated,
+        summary: { ...decorated.summary, ...(tl.market ? { market: marketAt(tl, tv) } : {}), ...(lines ? { lines } : {}) },
+        ...(tl.market ? { marketHistory: marketHistoryAt(tl, tv) } : {}),
+        // The record the page rewinds, cut at the replay clock, so a replay stops where a live session would have.
+        lineHistory: lineHistoryAt(tl, tv),
+      },
+      receivedAt,
+    };
   }
 }
 
@@ -223,7 +236,11 @@ export class ReplayLab implements ReplayHub {
     }
     if (!built) return { error: 'This scenario’s captured data is not installed' };
     // Real replays carry the exchange prices captured for their games. Synthetic scenarios never do, since their edits did not happen.
-    if (!def.synthetic) for (const tl of built.games) withCapturedMarket(this.fixtures, tl);
+    if (!def.synthetic)
+      for (const tl of built.games) {
+        withCapturedMarket(this.fixtures, tl);
+        withCapturedLines(this.fixtures, tl);
+      }
     this.sweep();
     const transient = [...this.sessions.values()].filter((s) => !s.persistent).length;
     if (!opts.persistent && transient >= this.options.maxSessions) return { error: 'Too many replay sessions are running; try again shortly' };

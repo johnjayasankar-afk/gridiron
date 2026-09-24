@@ -29,6 +29,7 @@ import { DriveStrip } from './DriveStrip';
 import { OddsStrip } from './OddsStrip';
 import { Score } from './Score';
 import { StatusPill } from './StatusPill';
+import { TapePulse } from './TapePulse';
 import { TeamLogo } from './TeamLogo';
 import { WinProbabilityMeter } from './WinProbabilityMeter';
 
@@ -207,6 +208,13 @@ export const GameCard = memo(function GameCard({ game, detail, variant, stale, a
           {!compact && <OddsStrip game={game} />}
         </div>
       )}
+
+      {/* The meter says who is ahead. This says how the game got there. It draws
+          nothing at all until the recording has something to draw, so a card
+          with no reported win probability is unchanged. It is behind the odds
+          preference because it IS win probability: turning odds off must turn
+          off every reading of them, not only the numbered one. */}
+      {showOdds && <TapePulse gameId={game.id} />}
 
       <FieldView game={game} situation={hasSpot ? situation : null} animation={moment.animation} variant={variant} hidden={!hasSpot} cutToken={cutToken} lift={lifted} pointer={pointer}>
         {stale && <span className="field-dim" aria-hidden="true" />}

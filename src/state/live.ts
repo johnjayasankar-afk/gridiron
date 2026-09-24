@@ -85,6 +85,14 @@ interface LiveState {
   timelineEpoch: number;
   /** Increases to start a new replay session for the same scenario after the old one ended. */
   sessionNonce: number;
+  /**
+   * The replay's own clock, published by the replay bar, which already reads it
+   * every second. The tape stamps its samples with the moment they were true,
+   * and in a replay that is this clock and not the wall clock: a Sunday played
+   * back at thirty times speed is still a Sunday, six minutes long only to the
+   * person watching it.
+   */
+  replayClock: { virtual: number; readAt: number; speed: number } | null;
 }
 
 interface LiveActions {
@@ -96,6 +104,7 @@ interface LiveActions {
   followYesterday: (enabled: boolean) => void;
   markTimelineJump: () => void;
   restartSession: () => void;
+  setReplayClock: (clock: { virtual: number; readAt: number; speed: number } | null) => void;
 }
 
 const buffer = new PresentationBuffer<World>(6 * 60_000);
@@ -284,6 +293,15 @@ export const useLive = create<LiveState & LiveActions>()((set, get) => {
     gaps: 0,
     timelineEpoch: 0,
     sessionNonce: 0,
+    replayClock: null,
+
+    setReplayClock(clock) {
+      const prev = get().replayClock;
+      // Every second, so it only lands in the store when it has actually moved.
+      if (prev === clock) return;
+      if (prev && clock && prev.virtual === clock.virtual && prev.speed === clock.speed) return;
+      set({ replayClock: clock });
+    },
 
     markTimelineJump() {
       set({ timelineEpoch: get().timelineEpoch + 1 });

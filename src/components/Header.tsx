@@ -1,4 +1,4 @@
-import { Bell, BookOpen, ChevronLeft, ChevronRight, Columns2, FlaskConical, Keyboard, LayoutGrid, Monitor, Moon, MoreHorizontal, Search, Settings2, SlidersHorizontal, Star, Sun, Users } from 'lucide-react';
+import { AudioWaveform, Bell, BookOpen, ChevronLeft, ChevronRight, Columns2, FlaskConical, Keyboard, LayoutGrid, Monitor, Moon, MoreHorizontal, Search, Settings2, SlidersHorizontal, Star, Sun, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { shiftDateKey } from '../../shared/util';
 import { navigate, setParams, useLocation } from '../app/router';
@@ -83,7 +83,7 @@ export function Header() {
   const ui = useUi.getState();
   const set = usePrefs.getState().set;
   const current = dayMode === 'date' ? date : today;
-  const layout = route.name === 'focus' ? 'focus' : route.name === 'wall' ? 'wall' : 'slate';
+  const layout = route.name === 'focus' ? 'focus' : route.name === 'wall' ? 'wall' : route.name === 'tape' ? 'tape' : 'slate';
 
   const pickDay = (key: string | null) => {
     if (!key) return;
@@ -157,6 +157,7 @@ export function Header() {
               { value: 'slate', label: 'Slate', icon: LayoutGrid, hideLabel: true },
               { value: 'focus', label: 'Focus', icon: Columns2, hideLabel: true },
               { value: 'wall', label: 'Wall', icon: Monitor, hideLabel: true },
+              { value: 'tape', label: 'Tape', icon: AudioWaveform, hideLabel: true },
             ]}
             onChange={(v) => navigate({ name: v })}
           />

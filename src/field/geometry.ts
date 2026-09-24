@@ -54,6 +54,55 @@ function pylons(league: LeagueId): THREE.BufferGeometry {
   return mergeGeometries(parts) ?? parts[0];
 }
 
+/*
+ * The ball.
+ *
+ * A football is not an ellipsoid. It is a circular arc revolved about its long
+ * axis, which is what gives it points at the ends and straighter sides than a
+ * spheroid has, and at the size the ball is drawn the silhouette is most of
+ * what there is to see. It was a scaled sphere before and read as a pill.
+ *
+ * Like every other mark on a schematic field it is drawn well over life size,
+ * so that it is still a football on a card.
+ */
+const BALL_LENGTH = 1.05;
+const BALL_RADIUS = 0.62;
+/** Radius of the arc whose ends meet the axis exactly at the two points of the ball. */
+const BALL_ARC = (BALL_LENGTH * BALL_LENGTH + BALL_RADIUS * BALL_RADIUS) / (2 * BALL_RADIUS);
+const BALL_OFFSET = BALL_ARC - BALL_RADIUS;
+
+/** How fat the ball is at a distance along its long axis. Zero at each point. */
+function ballRadiusAt(along: number): number {
+  return Math.max(0, Math.sqrt(Math.max(0, BALL_ARC * BALL_ARC - along * along)) - BALL_OFFSET);
+}
+
+/** A lathe of the ball's own profile over a stretch of its length. */
+function ballSurface(from: number, to: number, steps: number, swell = 0): THREE.BufferGeometry {
+  const profile: THREE.Vector2[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const along = from + ((to - from) * i) / steps;
+    profile.push(new THREE.Vector2(ballRadiusAt(along) + swell, along));
+  }
+  const lathe = new THREE.LatheGeometry(profile, 18);
+  // A lathe turns about y; the ball lies down the field, so its long axis is x.
+  lathe.rotateZ(-Math.PI / 2);
+  return lathe;
+}
+
+/** The lace panel: a band along the top with its cross stitches, in one draw call. */
+function lacesGeometry(): THREE.BufferGeometry {
+  const y = ballRadiusAt(0) - 0.035;
+  const parts: THREE.BufferGeometry[] = [new THREE.BoxGeometry(0.8, 0.06, 0.11).translate(0, y, 0)];
+  for (let i = 0; i < 7; i++) parts.push(new THREE.BoxGeometry(0.062, 0.062, 0.3).translate(-0.3 + i * 0.1, y + 0.012, 0));
+  return mergeGeometries(parts) ?? parts[0];
+}
+
+/** The two white stripes an NCAA ball carries, sat just proud of the leather. */
+function ballStripesGeometry(): THREE.BufferGeometry {
+  const parts = [-0.52, 0.52].map((centre) => ballSurface(centre - 0.05, centre + 0.05, 2, 0.012));
+  return mergeGeometries(parts) ?? parts[0];
+}
+
 function arrowGeometry(): THREE.BufferGeometry {
   const s = new THREE.Shape();
   s.moveTo(1.7, 0);
@@ -91,6 +140,22 @@ function sheetGeometry(): THREE.BufferGeometry {
   plane.rotateY(Math.PI / 2);
   plane.translate(0, 0.5, 0);
   return plane;
+}
+
+/**
+ * The gate a kick goes through, at the width of a league's uprights. An open box
+ * rather than a single sheet: a sheet facing down the field is edge on from the
+ * broadcast camera, which watches from the side, and all but disappeared at the
+ * one moment it exists for. One unit tall with its base at y = 0, so the caller
+ * sits it on the crossbar and scales it to the uprights.
+ */
+function uprightGate(league: LeagueId): THREE.BufferGeometry {
+  const w = markingsFor(league).goalpost.width;
+  const d = 1.4;
+  const across = (x: number) => new THREE.PlaneGeometry(w, 1).rotateY(Math.PI / 2).translate(x, 0.5, 0);
+  const along = (z: number) => new THREE.PlaneGeometry(d, 1).translate(0, 0.5, z);
+  const parts = [across(-d / 2), across(d / 2), along(-w / 2), along(w / 2)];
+  return mergeGeometries(parts) ?? parts[0];
 }
 
 /** An open box of light over an end zone, one unit tall with its base at y = 0. */
@@ -133,13 +198,12 @@ function gridMaterial(): THREE.ShaderMaterial {
 }
 
 function build() {
-  const ball = new THREE.SphereGeometry(1, 28, 18);
-  ball.scale(1.05, 0.62, 0.62);
   const beam = new THREE.CylinderGeometry(0.16, 0.16, 1, 10, 1, true);
   beam.translate(0, 0.5, 0);
   return {
     rim: rimGeometry(),
     sheet: sheetGeometry(),
+    gate: { nfl: uprightGate('nfl'), cfb: uprightGate('cfb') } as Record<LeagueId, THREE.BufferGeometry>,
     column: columnGeometry(),
     beam,
     floor: flat(new THREE.PlaneGeometry(260, 190)),
@@ -147,12 +211,15 @@ function build() {
     shadow: flat(new THREE.PlaneGeometry(TURF_HALF.x * 2 + 44, TURF_HALF.z * 2 + 40)),
     turf: flat(new THREE.PlaneGeometry(TURF_HALF.x * 2, TURF_HALF.z * 2)),
     endZone: flat(new THREE.PlaneGeometry(10, FIELD_WIDTH)),
+    /** The mark at the fifty: square, and about a third of the field's width across. */
+    midfield: flat(new THREE.PlaneGeometry(17, 17)),
     strip: flat(new THREE.PlaneGeometry(1, FIELD_WIDTH)),
     zone: flat(new THREE.PlaneGeometry(20, FIELD_WIDTH)),
     halo: flat(new THREE.PlaneGeometry(9, 9)),
     ring: flat(new THREE.RingGeometry(0.82, 1, 64)),
-    ball,
-    lace: new THREE.BoxGeometry(0.95, 0.1, 0.13),
+    ball: ballSurface(-BALL_LENGTH, BALL_LENGTH, 16),
+    lace: lacesGeometry(),
+    ballStripes: ballStripesGeometry(),
     arrow: arrowGeometry(),
     flag: flagGeometry(),
     posts: { nfl: goalposts('nfl'), cfb: goalposts('cfb') } as Record<LeagueId, THREE.BufferGeometry>,

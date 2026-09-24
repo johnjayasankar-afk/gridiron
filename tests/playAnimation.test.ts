@@ -33,7 +33,10 @@ describe('play animation planning', () => {
       planPlayAnimation(null, playInputFromEvent(play({ startProgress: 40, endProgress: 40, ...extra, kind })), live)!;
     expect(plan('pass_incomplete', { n: 5 })).toMatchObject({ path: 'incomplete', label: 'Incomplete', effect: null });
     expect(plan('sack', { n: 6, endProgress: 33 })).toMatchObject({ path: 'sack', label: 'Sack' });
-    expect(plan('interception', { n: 7, endProgress: 70, endOffense: 'home', turnover: true })).toMatchObject({ path: 'arc', effect: 'turnover', label: 'Interception' });
+    // An interception is thrown one way and taken back the other, so it is not
+    // the same shape as a completed pass: a single arc from the throw to where
+    // the return ended drew the ball flying to a spot behind the line.
+    expect(plan('interception', { n: 7, endProgress: 70, endOffense: 'home', turnover: true })).toMatchObject({ path: 'pick', effect: 'turnover', label: 'Interception' });
     expect(plan('penalty', { n: 8, endProgress: 35, penalty: true })).toMatchObject({ effect: 'penalty', label: 'Penalty' });
   });
 
@@ -72,12 +75,40 @@ describe('play animation planning', () => {
     expect(planPlayAnimation(null, input, live)).toMatchObject({ path: 'sweep', fromYard: 40, toYard: 58 });
   });
 
+  /**
+   * The provider says what a kick was on the conversion rather than in the kind
+   * of play, so an extra point used to slide along the ground like a run and a
+   * good one lit nothing. These are the two readings that fix it.
+   */
+  it('kicks a kicked conversion, and lights the uprights when it was good', () => {
+    const good = play({ n: 20, kind: 'extra_point', startProgress: 85, endProgress: 85, conversion: { kind: 'kick', result: 'good' }, scoring: true });
+    expect(planPlayAnimation(null, playInputFromEvent(good), live)).toMatchObject({ path: 'kick', effect: 'field_goal', label: 'Extra point good' });
+
+    const missed = play({ n: 21, kind: 'extra_point', startProgress: 85, endProgress: 85, conversion: { kind: 'kick', result: 'failed' } });
+    expect(planPlayAnimation(null, playInputFromEvent(missed), live)).toMatchObject({ path: 'kick', effect: null });
+
+    // A two-point try is a run or a pass and is never kicked.
+    const two = play({ n: 22, kind: 'two_point', startProgress: 85, endProgress: 98, conversion: { kind: 'two-point', result: 'good' } });
+    expect(planPlayAnimation(null, playInputFromEvent(two), live)!.path).not.toBe('kick');
+  });
+
+  it('never lets a blocked kick fly', () => {
+    for (const [n, kind] of [[23, 'field_goal_blocked'], [24, 'punt_blocked']] as const) {
+      const a = planPlayAnimation(null, playInputFromEvent(play({ n, kind, startProgress: 60, endProgress: 58 })), live)!;
+      expect(a.path, kind).toBe('blocked');
+      expect(inBand(a.durationMs, TIMINGS.standard), `${kind} ${a.durationMs}`).toBe(true);
+    }
+    // and a conversion the provider says was blocked is the same
+    const ep = play({ n: 25, kind: 'extra_point', startProgress: 85, endProgress: 84, conversion: { kind: 'kick', result: 'blocked' } });
+    expect(planPlayAnimation(null, playInputFromEvent(ep), live)).toMatchObject({ path: 'blocked', effect: null });
+  });
+
   it('keeps every movement and effect inside the motion bands', () => {
-    const kinds: PlayKind[] = ['rush', 'pass_complete', 'pass_incomplete', 'sack', 'interception', 'fumble_lost', 'punt', 'kickoff_return', 'field_goal_good', 'field_goal_missed', 'touchdown_return', 'safety', 'penalty', 'other'];
+    const kinds: PlayKind[] = ['rush', 'pass_complete', 'pass_incomplete', 'sack', 'interception', 'fumble_lost', 'punt', 'kickoff_return', 'field_goal_good', 'field_goal_missed', 'field_goal_blocked', 'punt_blocked', 'extra_point', 'two_point', 'touchdown_return', 'safety', 'penalty', 'other'];
     for (const [i, kind] of kinds.entries()) {
       for (const endProgress of [0, 12, 99]) {
         const a = planPlayAnimation(null, playInputFromEvent(play({ n: 100 + i, kind, startProgress: 50, endProgress })), live)!;
-        const band = a.path === 'settle' ? TIMINGS.micro : a.path === 'arc' || a.path === 'kick' ? TIMINGS.major : TIMINGS.standard;
+        const band = a.path === 'settle' ? TIMINGS.micro : a.path === 'arc' || a.path === 'kick' || a.path === 'pick' ? TIMINGS.major : TIMINGS.standard;
         expect(inBand(a.durationMs, band), `${kind} movement ${a.durationMs}`).toBe(true);
         expect(a.effectMs === 0 || inBand(a.effectMs, TIMINGS.standard) || inBand(a.effectMs, TIMINGS.major), `${kind} effect`).toBe(true);
       }

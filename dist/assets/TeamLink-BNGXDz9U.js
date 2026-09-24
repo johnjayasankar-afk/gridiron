@@ -1,2 +1,0 @@
-import{t as e}from"./jsx-runtime-C1-jHyVE.js";import{d as t,p as n,u as r}from"./ui-BLK_WkOF.js";var i=e();function a({teamKey:e,className:a=``,label:o,children:s}){if(!r(e))return(0,i.jsx)(i.Fragment,{children:s});let c={name:`team`,id:e};return(0,i.jsx)(`a`,{className:`team-link ${a}`,href:n(c),onClick:t(c),"aria-label":o,children:s})}export{a as t};
-//# sourceMappingURL=TeamLink-BNGXDz9U.js.map

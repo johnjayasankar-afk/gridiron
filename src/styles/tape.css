@@ -1,0 +1,678 @@
+/*
+ * The tape: the day on one clock.
+ *
+ * Three columns, one grid, so every lane shares an axis and the scrub line can
+ * stand in the band column while crossing every row. The label and the numbers
+ * sit outside the band on purpose: the band is the only thing on this page that
+ * carries time, and nothing else should be drawn into it.
+ */
+.tape {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  container-type: inline-size;
+}
+
+.tape__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.tape__head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 560;
+  letter-spacing: -0.015em;
+}
+
+.tape__sub {
+  margin: 4px 0 0;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.tape__empty {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* Games arriving at their endgames together: the one state a Sunday is about
+   that no single card can report, so it is said once, above everything. */
+.tape__together {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--attention-soft);
+  box-shadow: inset 0 0 0 1px var(--attention-line, var(--border-2));
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.tape__together svg {
+  color: var(--attention-ink, var(--attention));
+  flex: none;
+}
+
+.tape__together strong {
+  font-weight: 560;
+}
+
+.tape__together-names {
+  margin-left: auto;
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* What the recording can say about the day, before anyone asks about a game. */
+.tape__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tape__summary button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+  padding: 11px 13px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow 160ms var(--ease);
+}
+
+.tape__summary button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.tape__summary-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.tape__summary-value {
+  font-size: 17px;
+  font-weight: 560;
+  letter-spacing: -0.015em;
+}
+
+.tape__summary-detail {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+
+/* Said only when there is a play to open, so it never promises a moment the
+   provider did not report. */
+.tape__summary-go {
+  display: block;
+  margin-top: 3px;
+  color: var(--live-ink, var(--live));
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+}
+
+:root[data-theme='dark'] .tape__summary-go {
+  color: var(--mint-2);
+}
+
+/* Focusable, because reading a moment is the whole point of the view and a
+   pointer is not the only way people use one. */
+.tape__grid:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 6px;
+  border-radius: 8px;
+}
+
+.tape__grid {
+  --tape-label: 150px;
+  --tape-meta: 92px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--tape-label) minmax(0, 1fr) var(--tape-meta);
+  column-gap: 14px;
+  align-items: center;
+}
+
+.tape__axis {
+  position: relative;
+  grid-column: 2;
+  height: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Sits in the third column on the axis row, so the number below it is named. */
+.tape__colhead {
+  grid-column: 3;
+  display: flex;
+  justify-content: flex-end;
+  align-self: end;
+  padding-bottom: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.tape__tick {
+  position: absolute;
+  bottom: 2px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+/* One line across every lane, so a moment can be read in all of them at once. */
+.tape__scrub {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  width: 1px;
+  background: var(--text-3);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tape__scrub-time {
+  position: absolute;
+  top: -19px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.tape__list {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tape-lane {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 3px 0;
+  border-radius: 8px;
+}
+
+.tape-lane + .tape-lane {
+  border-top: 1px solid var(--border);
+}
+
+.tape-lane__open {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px 6px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tape-lane__open:hover {
+  background: var(--surface-2);
+}
+
+.tape-lane__open:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.tape-lane__teams {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tape-lane__team {
+  font-size: 13.5px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+}
+
+.tape-lane__at {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.tape-lane__score {
+  flex: none;
+  font-size: 13px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.tape-lane__dash {
+  padding: 0 2px;
+  color: var(--text-3);
+}
+
+/*
+ * The band is a button. A point on a lane is a play on the field, so pointing
+ * at a moment and opening it should be the same gesture, and the whole width of
+ * the lane is the target rather than a control tucked beside it.
+ */
+.tape-lane__band {
+  position: relative;
+  grid-column: 2;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  line-height: 0;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--tape-lane-bg);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.tape-lane__band:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* A lane you could open says so, quietly, in the material the rest of the
+   interface uses for the same thing. */
+.tape-lane__band:hover,
+.tape-lane__band:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--border-2);
+}
+
+:root[data-theme='dark'] .tape-lane__band:hover,
+:root[data-theme='dark'] .tape-lane__band:focus-visible {
+  box-shadow: inset 0 0 0 1px rgba(167, 243, 208, 0.22);
+}
+
+/*
+ * The two things in a lane that move. They are absolutely placed and driven by
+ * a transform, so the clock ticking and the pointer sliding never touch layout
+ * or paint: the compositor moves them and the lane's drawing is left alone.
+ */
+.tape-lane__now,
+.tape-lane__dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+/*
+ * Deliberately no will-change. It would pin two compositor layers per lane, and
+ * a Saturday card of sixty lanes is a hundred and twenty of them held for a
+ * 1.5px line and a 7px dot. The live edge animates opacity, which the browser
+ * promotes on its own while it runs; the dot only moves under the pointer, and
+ * repainting seven pixels costs less than owning a layer for the whole session.
+ */
+
+.tape-lane__now {
+  width: 1.5px;
+  height: 100%;
+  margin-left: -0.75px;
+  background: var(--live);
+}
+
+.tape-lane__dot {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 0 0 1.5px var(--tape-line);
+}
+
+.tape-lane__chart {
+  display: block;
+}
+
+.tape-lane__meta {
+  grid-column: 3;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.tape-lane__when {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tape-lane__movement {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+.tape-lane__movement.is-none {
+  color: var(--text-3);
+  font-size: 10.5px;
+}
+
+.tape-lane.is-live .tape-lane__team {
+  color: var(--text);
+}
+
+.tape__note {
+  margin: 2px 0 0;
+  max-width: 78ch;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* The marks a ribbon is read by, which have to work on either team's color.
+   Shared with the pulse on a card so a lane and a pulse of the same game are
+   the same drawing in the same ink. */
+.tape__grid,
+.tape-pulse {
+  --tape-mid: color-mix(in srgb, var(--text-3) 50%, transparent);
+  --tape-score: color-mix(in srgb, var(--text) 38%, transparent);
+  --tape-line: color-mix(in srgb, var(--text) 72%, transparent);
+  /* Quarters sit behind everything and must not compete with a score mark. */
+  --tape-period: color-mix(in srgb, var(--text) 13%, transparent);
+  --tape-lane-bg: var(--surface-sunk);
+}
+
+/* A narrow window cannot carry three columns and a readable band, so the
+   numbers step aside and the label shortens rather than the band. */
+@container (max-width: 640px) {
+  .tape__grid {
+    --tape-label: 104px;
+    --tape-meta: 0px;
+    column-gap: 10px;
+  }
+
+  .tape-lane__meta,
+  .tape__colhead {
+    display: none;
+  }
+
+  .tape-lane__open {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+}
+
+/* The live edge breathes. Opacity only, on an element the compositor already
+   owns, so it is the GPU's work and never the frame's. */
+@media (prefers-reduced-motion: no-preference) {
+  .tape-lane__now {
+    animation: tape-now 2.4s var(--ease) infinite;
+  }
+}
+
+@keyframes tape-now {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---------------------------------------------------------------- the HUD layer
+ *
+ * The tape in the same material as the rest of the interface: corner brackets,
+ * a fading rule, glowing numerals at night. It follows the layering rules in
+ * hud.css, so every effect here lives on a pseudo-element or a child, never on
+ * a lane or an ancestor of one.
+ *
+ * All of it is STATIC. Corner brackets, rules and glows are painted once when
+ * the element is rasterised and never again; nothing below animates except the
+ * one-shot entrance at the bottom, which moves transform and opacity only. The
+ * tape can carry sixty lanes and still cost the frame nothing once it is drawn.
+ */
+
+.tape__head {
+  position: relative;
+}
+
+/* The rule that trails off, as every section head in the app does. */
+.tape__head::after {
+  content: '';
+  flex: 1;
+  align-self: center;
+  height: 1px;
+  min-width: 40px;
+  margin-left: 4px;
+  background: linear-gradient(90deg, var(--hud-dim), transparent);
+}
+
+.tape__summary button {
+  position: relative;
+  overflow: hidden;
+}
+
+/* HUD brackets, the same two corners the panels wear. */
+.tape__summary button::after {
+  --b: var(--hud-dim);
+  content: '';
+  position: absolute;
+  inset: 5px;
+  background:
+    linear-gradient(var(--b), var(--b)) left top / 9px 1.5px no-repeat,
+    linear-gradient(var(--b), var(--b)) left top / 1.5px 9px no-repeat,
+    linear-gradient(var(--b), var(--b)) right bottom / 9px 1.5px no-repeat,
+    linear-gradient(var(--b), var(--b)) right bottom / 1.5px 9px no-repeat;
+  pointer-events: none;
+}
+
+/* The same light that follows the pointer across every other glass panel. It is
+   the one delegated listener in fx/spotlight.ts, which writes two custom
+   properties on the element under the pointer and nothing else, so this costs
+   one repaint of one pane rather than anything per frame. */
+:root[data-theme='dark'] .tape__summary button,
+:root[data-theme='light'] .tape__summary button {
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, -30%), var(--spot), transparent 46%), var(--glass);
+  box-shadow: inset 0 0 0 1px var(--border), var(--shadow-1);
+}
+
+.tape__summary button:hover {
+  box-shadow: inset 0 0 0 1px var(--border-2), var(--shadow-2);
+}
+
+:root[data-theme='dark'] .tape__summary-value {
+  text-shadow: 0 0 16px var(--glow);
+}
+
+/* The measurement a lane earned, lit the way every other count in the app is. */
+:root[data-theme='dark'] .tape-lane__movement {
+  color: var(--mint);
+  text-shadow: 0 0 10px rgba(110, 231, 183, 0.45);
+}
+
+:root[data-theme='dark'] .tape-lane__movement.is-none {
+  color: var(--text-3);
+  text-shadow: none;
+}
+
+/* A live lane is marked the way a live card is: at its edge, not across it. */
+.tape-lane {
+  position: relative;
+}
+
+.tape-lane.is-live::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, transparent, var(--live), transparent);
+  pointer-events: none;
+}
+
+:root[data-theme='dark'] .tape-lane__band {
+  box-shadow: inset 0 0 0 1px rgba(167, 243, 208, 0.07);
+}
+
+/* The row under the pointer, so that while scrubbing you know which reading is
+   the one you are looking at. One row at a time, and a background is the
+   cheapest thing to change. */
+.tape-lane:hover {
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+.tape-lane:hover .tape-lane__when,
+.tape-lane:hover .tape-lane__at {
+  color: var(--text-2);
+}
+
+/* The live edge carries a little light at night, as the field markings do. */
+:root[data-theme='dark'] .tape-lane__now {
+  box-shadow: 0 0 8px -1px var(--live);
+}
+
+:root[data-theme='dark'] .tape__scrub-time {
+  box-shadow: 0 0 18px -6px var(--glow);
+}
+
+/* ---------------------------------------------------------------- the entrance
+ *
+ * The lanes arrive in reading order, once. Transform and opacity only, so the
+ * compositor runs it and the main thread is not asked for anything; the delay
+ * is a step per lane rather than a timer per lane, so sixty of them is still
+ * one declaration. It is off under Reduced and 2D effects and under the
+ * device's reduced-motion setting, which is how every other motion in the app
+ * behaves.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-effects='full'] .tape-lane {
+    /* backwards, not both: it holds the state BEFORE the delay and then lets go,
+       so a finished entrance stops applying to the element at all. */
+    animation: tape-lane-in 420ms var(--ease) backwards;
+    /* Capped on purpose. A Saturday can put sixty lanes here, and an unbounded
+       step would leave the last one invisible for a second and a half, which is
+       the same thing as hiding it. Past the twelfth they arrive together. */
+    animation-delay: calc(min(var(--lane-i, 0), 12) * 26ms);
+  }
+
+  :root[data-effects='full'] .tape__summary button {
+    animation: tape-lane-in 380ms var(--ease) backwards;
+    animation-delay: calc(var(--card-i, 0) * 50ms);
+  }
+}
+
+@keyframes tape-lane-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 7px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* ---------------------------------------------------------------- the pulse on a card */
+
+/*
+ * The tape's lane at card size. It is drawn in its own 100 by 24 units and
+ * stretched to the card here, so a window resize never redraws one: the
+ * browser scales a path it has already rasterised.
+ *
+ * Team colour comes from the two variables the card already sets for its own
+ * light, so the pulse costs no colour work and follows a theme change with the
+ * card rather than a render behind it.
+ */
+.tape-pulse {
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: -2px 0 10px;
+  border-radius: 3px;
+  overflow: hidden;
+  /* A pulse is a reading, not a control: it must never take a tab stop or a
+     pointer away from the card link it sits inside. */
+  pointer-events: none;
+}
+
+.card-compact .tape-pulse {
+  height: 15px;
+  margin-bottom: 8px;
+}
+
+.tape-pulse__home {
+  fill: var(--team-home, var(--tone));
+  fill-opacity: 0.66;
+}
+
+.tape-pulse__away {
+  fill: var(--team-away, var(--tone));
+  fill-opacity: 0.66;
+}
+
+/* Lighter than the lane's: at a fifth of the height the same weight of ink
+   closes the band up into a solid bar. */
+.tape-pulse {
+  --tape-line: color-mix(in srgb, var(--text) 46%, transparent);
+}
+
+.tape-pulse__line {
+  fill: none;
+  stroke: var(--tape-line);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.tape-pulse__mid {
+  stroke: var(--tape-mid);
+  stroke-width: 1;
+}
+
+/* Less in the dark, not more: a team color already carries against a dark card,
+   and at the Day theme's weight a decided game shouts louder than its own score. */
+:root[data-theme='dark'] .tape-pulse__home,
+:root[data-theme='dark'] .tape-pulse__away {
+  fill-opacity: 0.54;
+}

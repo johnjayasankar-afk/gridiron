@@ -3,7 +3,7 @@
  * listener sets --mx and --my on the panel under the pointer, at most once a
  * frame; CSS draws the light. Nothing re-renders, and touch input is ignored.
  */
-const SELECTOR = '.card, .panel, .quiet-block, .watch-item, .digest-item, .glass';
+const SELECTOR = '.card, .panel, .quiet-block, .watch-item, .digest-item, .glass, .tape-summary-pane';
 
 export function installSpotlight(): () => void {
   let frame = 0;

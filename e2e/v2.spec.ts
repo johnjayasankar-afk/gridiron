@@ -115,13 +115,23 @@ test.describe('Game page', () => {
     await openReplay(page, { path: `/game/${GAME}`, at: 0.5 });
     const nav = page.getByRole('navigation', { name: 'Other games on the slate' });
     await expect(nav.locator('.game-nav-pos')).toHaveText(/^\d+\/\d+$/);
-    const position = (await nav.locator('.game-nav-pos').textContent()) ?? '';
+
+    // The game the nav names as next, read at the moment the key is pressed.
+    // The slate re-ranks on its own clock every twenty seconds, so an index
+    // captured before the move is not a promise about the order after it; this
+    // test used to compare the two and failed whenever a tick landed between
+    // them. What "in slate order" means is that the key goes to the game the
+    // nav is pointing at, and that is what is asserted.
+    const label = (await nav.getByRole('button', { name: /^Next game/ }).getAttribute('aria-label')) ?? '';
+    const [away, home] = label.replace(/^Next game:\s*/, '').split(' at ');
+    expect(away && home, `next game label: ${label}`).toBeTruthy();
+
     await page.keyboard.press(']');
     await expect(page).not.toHaveURL(new RegExp(GAME));
-    await expect(nav.locator('.game-nav-pos')).not.toHaveText(position);
+    await expect(page).toHaveTitle(new RegExp(`\\b${away}\\b[\\s\\S]*\\b${home}\\b`));
     await page.keyboard.press('[');
     await expect(page).toHaveURL(new RegExp(GAME));
-    await expect(nav.locator('.game-nav-pos')).toHaveText(position);
+    await expect(nav.locator('.game-nav-pos')).toHaveText(/^\d+\/\d+$/);
   });
 });
 
@@ -137,7 +147,12 @@ test.describe('Keyboard and appearance', () => {
     await page.keyboard.press('k');
     await expect(links.first()).toBeFocused();
 
-    const id = await page.locator('.card').first().getAttribute('data-game');
+    // From the card that HAS focus, not the card that happens to be first. They
+    // are the same card until the slate reorders under load, and then this test
+    // was asserting that F focuses whatever sorted to the top, which is not its
+    // claim and not what F does.
+    const id = await page.evaluate(() => document.activeElement?.closest('.card')?.getAttribute('data-game') ?? null);
+    expect(id).toBeTruthy();
     await page.keyboard.press('f');
     await expect.poll(async () => (await storedPrefs(page)).focusGames).toContain(id);
     await page.keyboard.press('p');

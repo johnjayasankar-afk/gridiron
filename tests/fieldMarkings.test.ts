@@ -35,3 +35,16 @@ describe('field markings from the rulebooks', () => {
     expect(NUMBERED_LINES.map((l) => l.label)).toEqual(['10', '20', '30', '40', '50', '40', '30', '20', '10']);
   });
 });
+
+describe('the ball', () => {
+  /**
+   * The one marking that is not on the field. NCAA rules require two white
+   * stripes on the panels beside the laces so the ball can be picked up at
+   * night; the NFL ball carries none. It is drawn from here like every other
+   * rulebook value, so a college ball and a pro ball are not the same ball.
+   */
+  it('carries NCAA stripes and no NFL ones', () => {
+    expect(NCAA_MARKINGS.ball.stripes).toBe(true);
+    expect(NFL_MARKINGS.ball.stripes).toBe(false);
+  });
+});

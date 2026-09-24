@@ -24,6 +24,7 @@ import { TeamPageLoading } from '../views/TeamLoading';
 import { WallView } from '../views/WallView';
 import { navigate, useLocation } from './router';
 import { useAlerts } from './useAlerts';
+import { useTapeRecorder } from './useTape';
 import { useConnection } from './useConnection';
 import { useDigestDriver } from './useDigest';
 import { useDirectorDriver } from './useDirector';
@@ -42,6 +43,10 @@ const PartyDialog = lazy(() => import('../components/PartyDialog').then((m) => (
  * fetched once the page is idle, so they are ready before anyone opens them.
  */
 const DetailView = lazyWithPreload(() => import('../views/DetailView').then((m) => m.DetailView));
+// The tape is a whole view most visits never open, so its code waits like the
+// game page's does. The RECORDER is not lazy: it has to be running from the
+// moment the page is, or the tape would only begin when somebody looked at it.
+const TapeView = lazyWithPreload(() => import('../views/TapeView').then((m) => m.TapeView));
 const Dialogs = lazyWithPreload(() => import('../components/dialogs').then((m) => m.Dialogs));
 const CommandPalette = lazyWithPreload(() => import('../components/CommandPalette').then((m) => m.CommandPalette));
 
@@ -151,7 +156,8 @@ function useSurfaceEffects() {
 function useSoundUnlock() {
   useEffect(() => {
     const unlock = () => {
-      if (usePrefs.getState().sound) void unlockSound();
+      const p = usePrefs.getState();
+      if (p.sound || p.fieldSound) void unlockSound();
     };
     window.addEventListener('pointerdown', unlock, { once: true });
     window.addEventListener('keydown', unlock, { once: true });
@@ -169,6 +175,7 @@ export function App() {
   usePartySync();
   usePushSync();
   useAlerts();
+  useTapeRecorder();
   useDirectorDriver();
   useDigestDriver();
   useShortcuts();
@@ -184,7 +191,7 @@ export function App() {
     window.scrollTo({ top: 0 });
   }, [routeKey]);
 
-  useEffect(() => preloadWhenIdle([DetailView.preload, Dialogs.preload, CommandPalette.preload]), []);
+  useEffect(() => preloadWhenIdle([DetailView.preload, Dialogs.preload, CommandPalette.preload, TapeView.preload]), []);
 
   return (
     <div className={`app route-${route.name}`}>
@@ -213,6 +220,11 @@ export function App() {
             <ViewBoundary key={routeKey} onHome={home}>
               {route.name === 'slate' && <SlateView />}
               {route.name === 'focus' && <FocusView />}
+              {route.name === 'tape' && (
+                <Suspense fallback={null}>
+                  <TapeView />
+                </Suspense>
+              )}
               {route.name === 'game' && (
                 <Suspense fallback={null}>
                   <DetailView key={route.id} id={route.id} />

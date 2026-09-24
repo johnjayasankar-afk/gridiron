@@ -50,6 +50,15 @@ test.describe('preferences, graphics, layout and accessibility', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('.field-svg').first()).toBeVisible();
     await expect(page.locator('canvas')).toHaveCount(0);
+
+    // The 2D field carries the same readings as the 3D one, including who has the
+    // ball: the arrow is the team's colour, not the field's own.
+    const arrow = page.locator('.field-svg-ball path').first();
+    if (await arrow.count()) {
+      const fill = await arrow.getAttribute('fill');
+      expect(fill, 'the arrow carries a team colour').not.toBe('#a7f3d0');
+      expect(fill).toMatch(/^#[0-9a-f]{6}$/i);
+    }
   });
 
   test('a lost graphics context falls back to 2D, says so, and recovers', async ({ page }) => {
@@ -143,5 +152,53 @@ test.describe('preferences, graphics, layout and accessibility', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect(trigger).toBeFocused();
+  });
+
+  /**
+   * Field sounds are off until turned on, are the game page's only, and cannot
+   * machine-gun. Nothing here listens to audio; it counts the oscillators the
+   * page builds, which is the only honest way to tell a sound was made.
+   */
+  test('field sounds play on a game page, only when turned on', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __oscs: number };
+      w.__oscs = 0;
+      const make = AudioContext.prototype.createOscillator;
+      AudioContext.prototype.createOscillator = function (this: AudioContext) {
+        w.__oscs++;
+        return make.call(this);
+      };
+    });
+    await openReplay(page, { at: 0.5, paused: false, speed: 30 });
+    await liveCards(page).first().locator('.card-link').click();
+    await expect(page.locator('.scoreboard')).toBeVisible();
+
+    // Off by default: a stretch of live play makes nothing.
+    await page.waitForTimeout(6000);
+    expect(await page.evaluate(() => (window as unknown as { __oscs: number }).__oscs), 'silent until turned on').toBe(0);
+
+    await openMenuItem(page, 'Display settings');
+    await page.getByRole('dialog', { name: 'Display' }).getByRole('switch', { name: 'Field sounds' }).click();
+    await expect(page.getByRole('dialog', { name: 'Display' })).toContainText(/Field sounds are on|blocked audio/);
+    await page.keyboard.press('Escape');
+    const afterTest = await page.evaluate(() => (window as unknown as { __oscs: number }).__oscs);
+    test.skip(afterTest === 0, 'this browser blocked audio');
+
+    // Stepping onto plays sounds them.
+    await page.getByRole('button', { name: 'First play of the game' }).click();
+    const next = page.getByRole('button', { name: 'Next play' });
+    for (let i = 0; i < 6; i++) {
+      await next.click();
+      await page.waitForTimeout(320);
+    }
+    const played = (await page.evaluate(() => (window as unknown as { __oscs: number }).__oscs)) - afterTest;
+    expect(played, 'plays made sounds').toBeGreaterThan(0);
+
+    // And a slate of thirteen games never does, whatever is happening on it.
+    await page.getByRole('button', { name: 'Slate' }).first().click();
+    await expect(liveCards(page).first()).toBeVisible();
+    const onSlate = await page.evaluate(() => (window as unknown as { __oscs: number }).__oscs);
+    await page.waitForTimeout(6000);
+    expect(await page.evaluate(() => (window as unknown as { __oscs: number }).__oscs), 'the slate is silent').toBe(onSlate);
   });
 });

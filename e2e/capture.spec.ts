@@ -23,11 +23,22 @@ for (const [name, width, height] of [
 ] as const) {
   test(`slate at ${name}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
-    await openReplay(page, { at: 0.35 });
+    const session = await openReplay(page, { at: 0.35 });
     await expect(liveCards(page).first()).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, 0));
     await settle(page);
     await page.screenshot({ path: `${OUT}/slate-${name}.png` });
+
+    // The pulse on a card is a recording of an afternoon, and a paused replay
+    // never records a second reading, so the close up of the cards runs the
+    // afternoon on for a moment and then stops it again. Without this the card
+    // shots document a slate the feature is missing from.
+    await control(page, session, { type: 'speed', speed: 60 });
+    await control(page, session, { type: 'play' });
+    await expect(page.locator('.tape-pulse').first()).toBeVisible({ timeout: 40_000 });
+    await page.waitForTimeout(4000);
+    await control(page, session, { type: 'pause' });
+
     await page.evaluate(() => document.querySelector('.section-live')?.scrollIntoView({ block: 'start' }));
     await page.evaluate(() => window.scrollBy(0, -80));
     await settle(page);
@@ -208,6 +219,21 @@ test('v4: odds and win probability', async ({ page }) => {
   await page.screenshot({ path: `${OUT}/game-1440-win-probability.png` });
 });
 
+/**
+ * The one way to photograph a sky: no captured replay carries weather, because
+ * it lives on the live scoreboard and was not captured with these games, so this
+ * is the synthetic scenario that says plainly that its snow did not happen.
+ */
+test('v5: the field under its own sky', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReplay(page, { path: '/game/nfl-401872925', scenario: 'test-weather', at: 0.4 });
+  await expect.poll(() => page.evaluate(() => window.__gridironField?.()?.sky?.kind ?? null), { timeout: 20_000 }).toBe('snow');
+  await settle(page);
+  // Long enough for the snow to have fallen into the middle of its own descent rather than starting at the top.
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${OUT}/game-1440-weather.png` });
+});
+
 test('an empty day and the command palette', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openReplay(page, { at: 0 });
@@ -218,4 +244,35 @@ test('an empty day and the command palette', async ({ page }) => {
   await page.getByPlaceholder('Search games, teams or commands').fill('bills');
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${OUT}/palette-1440.png` });
+});
+
+/**
+ * The tape needs a recording, and a recording is made by watching. So this one
+ * runs the replay fast for a while and lets it write, which is the only way to
+ * photograph a view whose subject is an afternoon.
+ */
+test('the tape, after an afternoon of it', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReplay(page, { at: 0.18, paused: false, speed: 120 });
+  await expect(liveCards(page).first()).toBeVisible();
+  await page.keyboard.press('4');
+  await expect(page.getByRole('heading', { name: 'The tape' })).toBeVisible();
+  // enough of the day recorded that the lanes have a shape to show
+  await expect.poll(() => page.locator('.tape-lane').count(), { timeout: 60_000 }).toBeGreaterThan(6);
+  await expect
+    .poll(async () => (await page.locator('.tape-lane__movement').allInnerTexts()).filter((v) => v !== 'none').length, { timeout: 60_000 })
+    .toBeGreaterThan(4);
+  await page.waitForTimeout(45_000);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: `${OUT}/tape-1440.png` });
+
+  // and one moment read across every game at once
+  const band = page.locator('.tape-lane__band').first();
+  await band.hover();
+  await expect(page.locator('.tape__scrub')).toBeVisible();
+  const box = (await band.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.42, box.y + box.height / 2);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${OUT}/tape-1440-scrub.png` });
 });

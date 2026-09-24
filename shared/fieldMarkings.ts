@@ -41,6 +41,12 @@ export interface FieldMarkings {
   border: { width: number; extent: 'full' | 'between-20s' };
   goalpost: { crossbarHeight: number; width: number; uprightTop: number; setback: number; color: string };
   pylons: Array<{ x: number; z: number }>;
+  /**
+   * The ball itself. NCAA rules require two one inch white stripes on the panels
+   * either side of the laces; the NFL ball carries none, and has not since the
+   * white ball was dropped. It is the one marking that is not on the field.
+   */
+  ball: { stripes: boolean };
 }
 
 function pylons(extraAtHashes: boolean, hashInner: number): Array<{ x: number; z: number }> {
@@ -73,6 +79,7 @@ export const NFL_MARKINGS: FieldMarkings = {
   border: { width: 6 * FT, extent: 'full' },
   goalpost: { crossbarHeight: 10 * FT, width: 18.5 * FT, uprightTop: 45 * FT, setback: 2, color: '#d8b24a' },
   pylons: pylons(false, NFL_HASH_INNER),
+  ball: { stripes: false },
 };
 
 export const NCAA_MARKINGS: FieldMarkings = {
@@ -94,6 +101,7 @@ export const NCAA_MARKINGS: FieldMarkings = {
   border: { width: 6 * FT, extent: 'between-20s' },
   goalpost: { crossbarHeight: 10 * FT, width: 18.5 * FT, uprightTop: 30 * FT, setback: 2, color: '#eee6c6' },
   pylons: pylons(true, NCAA_HASH_INNER),
+  ball: { stripes: true },
 };
 
 export const markingsFor = (league: LeagueId): FieldMarkings => (league === 'nfl' ? NFL_MARKINGS : NCAA_MARKINGS);

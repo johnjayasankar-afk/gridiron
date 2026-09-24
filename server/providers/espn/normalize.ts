@@ -50,7 +50,7 @@ import { ADMIN_KINDS, TOUCHDOWN_KINDS, UNKNOWN_SPOT, gameId as toGameId, isLiveO
 import { labelFromProgress, progressFromSchematicYard, type Side, type SpotProvenance } from '../../../shared/field.js';
 import { clockToSeconds, fingerprint } from '../../../shared/util.js';
 import { classifyPlayType, parseConversion, parseReview } from './classify.js';
-import { lastPlayWinProbability, latestWinProbability, normalizeLines, normalizePredictor, normalizeWinProbability } from './odds.js';
+import { lastPlayWinProbability, latestWinProbability, normalizeLines, normalizePredictor, normalizeWeather, normalizeWinProbability } from './odds.js';
 import { arr, at, bool, hexColor, num, obj, safeUrl, str } from './raw.js';
 
 export const PROVIDER_NAME = 'ESPN';
@@ -429,8 +429,10 @@ export function normalizeScoreboardEvent(
     situation,
     broadcasts: normalizeBroadcasts(comp),
     venue: venue
-      ? { name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')) }
+      ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')), indoor: bool(venue.indoor), grass: bool(venue.grass) }
       : null,
+    // The weather at the venue, as reported. A roofed venue has none, which is the roof saying so.
+    weather: normalizeWeather(e.weather),
     neutralSite: bool(comp.neutralSite),
     conferenceGame: bool(comp.conferenceCompetition),
     links: { gamePage: gamePageLink(e.links) },
@@ -816,8 +818,9 @@ export function normalizeSummary(
         : null),
     broadcasts: normalizeBroadcasts(comp),
     venue: venue
-      ? { name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')) }
+      ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')), indoor: bool(venue.indoor), grass: bool(venue.grass) }
       : null,
+    weather: normalizeWeather(at(root, 'header', 'weather') ?? root.weather),
     neutralSite: bool(comp.neutralSite),
     conferenceGame: bool(comp.conferenceCompetition),
     links: { gamePage: gamePageLink(header.links) },

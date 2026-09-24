@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 import { prefersReducedMotion } from '../lib/motion';
 
-export type Route = { name: 'slate' } | { name: 'focus' } | { name: 'wall' } | { name: 'game'; id: string } | { name: 'team'; id: string } | { name: 'notFound' };
+export type Route = { name: 'slate' } | { name: 'focus' } | { name: 'wall' } | { name: 'tape' } | { name: 'game'; id: string } | { name: 'team'; id: string } | { name: 'notFound' };
 
 export interface AppLocation {
   route: Route;
@@ -35,6 +35,7 @@ function routeFor(pathname: string): Route {
   if (pathname === '/' || pathname === '/index.html') return { name: 'slate' };
   if (pathname === '/focus' || pathname === '/focus/') return { name: 'focus' };
   if (pathname === '/wall' || pathname === '/wall/') return { name: 'wall' };
+  if (pathname === '/tape' || pathname === '/tape/') return { name: 'tape' };
   return { name: 'notFound' };
 }
 
@@ -64,6 +65,8 @@ export function pathFor(route: Route): string {
       return '/focus';
     case 'wall':
       return '/wall';
+    case 'tape':
+      return '/tape';
     case 'notFound':
       return window.location.pathname;
     default:

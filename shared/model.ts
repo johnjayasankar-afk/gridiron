@@ -6,6 +6,7 @@
  * "false". Presentation code reads only these types.
  */
 import type { Side, SpotProvenance } from './field.js';
+import type { GameWeather } from './sky.js';
 
 export type { Side } from './field.js';
 
@@ -264,6 +265,42 @@ export interface MarketPricePoint {
 }
 
 /** One team's contract to win across time, as the exchange recorded it. */
+/** One reading of a sportsbook's line, with when Gridiron saw it. */
+/**
+ * One reading of a sportsbook's line, and when it was taken. Both sides of every
+ * market are written down rather than one side and a sign, so the record can
+ * reproduce the table it came from without assuming the book was symmetric.
+ */
+export interface LinePoint {
+  /** ISO time the reading was taken. */
+  at: string;
+  /** Each side's spread, negative when favoured, with its American odds. */
+  spreadHome: number | null;
+  spreadAway: number | null;
+  spreadOddsHome: number | null;
+  spreadOddsAway: number | null;
+  /** The game total, with the price on each side of it. */
+  total: number | null;
+  totalOddsOver: number | null;
+  totalOddsUnder: number | null;
+  moneylineHome: number | null;
+  moneylineAway: number | null;
+}
+
+/**
+ * A sportsbook's line as Gridiron saw it move. The provider gives an opening and
+ * a latest line and no times, so this is Gridiron's own record of what it was
+ * told and when, never an estimate of a line nobody reported.
+ */
+export interface LineHistory {
+  /** The sportsbook, as named by the provider. */
+  provider: string;
+  /** Oldest first, one per change seen. */
+  points: LinePoint[];
+  /** Recorded earlier for the replay lab rather than seen now. */
+  captured: boolean;
+}
+
 export interface MarketHistory {
   /** The exchange, e.g. "Kalshi". */
   source: string;
@@ -289,7 +326,15 @@ export interface GameSummary {
   status: GameStatus;
   situation: Situation | null;
   broadcasts: Broadcast[];
-  venue: { name: string | null; city: string | null; state: string | null } | null;
+  /**
+   * `indoor` and `grass` are the provider's own flags: a roof is on the game's
+   * competition, the surface is on the venue's own document. Either can be
+   * unknown, which is not the same as false, so both are nullable and a field
+   * lit or painted from them only changes when they are actually reported.
+   */
+  venue: { id: string | null; name: string | null; city: string | null; state: string | null; indoor: boolean | null; grass: boolean | null } | null;
+  /** The weather the provider reports at the venue. Absent indoors and for some games. */
+  weather?: GameWeather | null;
   neutralSite: boolean | null;
   conferenceGame: boolean | null;
   links: { gamePage: string | null };
@@ -488,6 +533,7 @@ export interface GameDetail {
   winProbability?: WinProbabilityPoint[];
   /** The home team's prediction market price across time, when the server reads an exchange that lists this game. */
   marketHistory?: MarketHistory | null;
+  lineHistory?: LineHistory | null;
 }
 
 // ---------------------------------------------------------------- freshness & coverage

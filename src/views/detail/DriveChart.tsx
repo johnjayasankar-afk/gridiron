@@ -4,10 +4,10 @@
  * drive's start, the line to gain and the ball. Spots come from the provider
  * only: a play without one keeps its row and says so.
  */
-import { useMemo, type CSSProperties } from 'react';
-import { describeDrive, driveOutcome, driveStats, driveTrack, type DriveTrackPlay } from '../../../shared/driveTrack';
+import type { CSSProperties } from 'react';
+import { describeDrive, driveOutcome, driveStats, type DriveTrack, type DriveTrackPlay } from '../../../shared/driveTrack';
 import { downDistance, teamFor } from '../../../shared/format';
-import type { GameDetail, GameSummary, PlayKind, Situation } from '../../../shared/model';
+import type { GameSummary, PlayKind, Situation } from '../../../shared/model';
 import { isLiveOrPaused } from '../../../shared/model';
 import type { PlayFrame } from '../../../shared/replayFrames';
 import { periodShort } from '../../../shared/util';
@@ -64,22 +64,16 @@ function Bar({ p }: { p: DriveTrackPlay }) {
 }
 
 export interface DriveChartProps {
-  detail: GameDetail;
+  /** Built once by the view, because the field draws the same drive. */
+  track: DriveTrack | null;
   game: GameSummary;
   situation: Situation | null;
   frame: PlayFrame | null;
   onSelectPlay: (order: number, driveId: string) => void;
 }
 
-export function DriveChart({ detail, game, situation, frame, onSelectPlay }: DriveChartProps) {
+export function DriveChart({ track, game, situation, frame, onSelectPlay }: DriveChartProps) {
   const dark = useIsDark();
-  const frameDrive = frame ? frame.play.driveId : undefined;
-  const frameOrder = frame ? frame.play.order : null;
-  const track = useMemo(() => {
-    // A replayed play that belongs to no reported drive has no drive to show.
-    if (frameDrive === null) return null;
-    return driveTrack(detail, frameDrive === undefined ? { situation } : { driveId: frameDrive, upToOrder: frameOrder });
-  }, [detail, situation, frameDrive, frameOrder]);
   const live = isLiveOrPaused(game.status.kind);
   const team = track ? teamFor(game, track.offense) : null;
   const heading = frame ? 'Drive at this play' : track && !track.inProgress ? (live ? 'Last drive' : 'Final drive') : 'Current drive';

@@ -3,11 +3,13 @@
  * rulebook markings and the same reported spot as the 3D field, top-down.
  */
 import { memo, useId } from 'react';
+import type { DrivePlayTone, DriveTrack } from '../../shared/driveTrack';
 import { attackDirection, firstDownTarget, lateralZ, schematicYardFromProgress } from '../../shared/field';
+import { SKY_STRENGTH, multiplyHex, skyFor, skyLabel, skyLook, skyTint } from '../../shared/sky';
 import { markingsFor, NUMBERED_LINES } from '../../shared/fieldMarkings';
 import type { GameSummary, Situation } from '../../shared/model';
 import { accessibleSummary, SPOT_UNAVAILABLE } from '../../shared/format';
-import { mixColor } from './color';
+import { accentFor, mixColor } from './color';
 
 const S = 10; // pixels per yard
 const PAD = 2.2; // border band in yards
@@ -23,12 +25,14 @@ export interface FieldSvgProps {
   /** Schematic yard the ball came from on the most recent reported play. */
   fromYard?: number | null;
   historical?: boolean;
+  /** The drive to draw behind the ball, as the 3D field draws it. The game page only. */
+  drive?: DriveTrack | null;
   /** Draw the unavailable-spot message inside the SVG (standalone use). Cards draw it as DOM instead. */
   showMessage?: boolean;
   className?: string;
 }
 
-export const FieldSvg = memo(function FieldSvg({ game, situation, compact = false, fromYard = null, historical = false, showMessage = false, className = '' }: FieldSvgProps) {
+export const FieldSvg = memo(function FieldSvg({ game, situation, compact = false, fromYard = null, historical = false, drive = null, showMessage = false, className = '' }: FieldSvgProps) {
   const id = useId().replace(/:/g, '');
   const m = markingsFor(game.league);
   const spot = situation?.spot ?? null;
@@ -40,11 +44,38 @@ export const FieldSvg = memo(function FieldSvg({ game, situation, compact = fals
   const target = known && offense && spot!.progress !== null ? firstDownTarget(spot!.progress, situation?.distance ?? null, situation?.goalToGo === true) : null;
   const targetX = target && offense ? X(schematicYardFromProgress(target.progress, offense)) : null;
   const dir = offense ? attackDirection(offense) : 1;
+  // The arrow says which way the offense is going, so it says who they are too,
+  // the same as the 3D field does. With no reported possession there is no arrow.
+  const held = offense ? accentFor(game[offense].color, true) : null;
+
+  /*
+   * The drive, the same three readings the 3D field draws and from the same
+   * tested source: the ground between where it began and where the ball is, as a
+   * ramp that is faintest at the start; the play it began at, dashed so it can
+   * never be taken for the line of scrimmage or the line to gain; and one mark
+   * per play the provider gave an end spot for, along the near sideline.
+   */
+  const driveTeam = drive?.offense ? accentFor(game[drive.offense].color, true) : null;
+  const band = drive && drive.start !== null && drive.ball !== null && Math.abs(drive.ball - drive.start) >= 0.8 ? { from: X(drive.start), to: X(drive.ball) } : null;
+  const driveTicks = drive?.plays.filter((play) => play.to !== null) ?? [];
+  const toneFill = (tone: DrivePlayTone, team: string) =>
+    tone === 'loss' || tone === 'conceded' || tone === 'turnover' || tone === 'penalty' ? '#f4aa5c' : tone === 'score' ? '#a7f3d0' : team;
   const redZone = known && offense && spot!.progress !== null && spot!.progress >= 80;
-  const turfA = '#1d5a3c';
-  const turfB = '#21633f';
-  const awayZone = mixColor(game.away.color ?? '#1c3326', '#13241b', 0.55);
-  const homeZone = mixColor(game.home.color ?? '#1c3326', '#13241b', 0.55);
+  /*
+   * The same sky the 3D field is lit by, multiplied through the same arithmetic
+   * in shared/sky, so the fallback is this field drawn another way rather than a
+   * second opinion about what an overcast afternoon looks like. And the same
+   * rule about mowing: stripes are a grass field's, because a mower laying the
+   * blades one way and then the other is what makes them.
+   */
+  const sky = skyFor(game.weather, game.venue?.indoor);
+  const wash = skyTint(skyLook(sky), SKY_STRENGTH.classic);
+  const mown = game.venue?.grass !== false;
+  const turfA = multiplyHex('#1d5a3c', wash);
+  const turfB = multiplyHex(mown ? '#21633f' : '#1d5a3c', wash);
+  const surround = multiplyHex('#163a28', wash);
+  const awayZone = multiplyHex(mixColor(game.away.color ?? '#1c3326', '#13241b', 0.55), wash);
+  const homeZone = multiplyHex(mixColor(game.home.color ?? '#1c3326', '#13241b', 0.55), wash);
   const line = 'rgba(244, 248, 243, 0.92)';
   const numbersFill = 'rgba(244, 248, 243, 0.78)';
 
@@ -73,7 +104,7 @@ export const FieldSvg = memo(function FieldSvg({ game, situation, compact = fals
       preserveAspectRatio="xMidYMid meet"
     >
       <title id={`${id}-t`}>{`${game.away.abbreviation} at ${game.home.abbreviation} field (schematic, top-down)`}</title>
-      <desc id={`${id}-d`}>{`${accessibleSummary(game, situation)} Schematic orientation: ${game.away.abbreviation} defends the left end zone.`}</desc>
+      <desc id={`${id}-d`}>{`${accessibleSummary(game, situation)} Schematic orientation: ${game.away.abbreviation} defends the left end zone.${sky ? ` Reported at the venue: ${skyLabel(sky)}.` : ''}`}</desc>
       <defs>
         <pattern id={`${id}-stripes`} width={10 * S} height={H} patternUnits="userSpaceOnUse" x={X(0)}>
           <rect width={5 * S} height={H} fill={turfA} />
@@ -84,7 +115,7 @@ export const FieldSvg = memo(function FieldSvg({ game, situation, compact = fals
           <stop offset="1" stopColor="#6ee7b7" stopOpacity="0" />
         </radialGradient>
       </defs>
-      <rect x={0} y={0} width={W} height={H} rx={18} fill="#163a28" />
+      <rect x={0} y={0} width={W} height={H} rx={18} fill={surround} />
       {m.border.extent === 'full' ? (
         <rect x={PAD * S * 0.15} y={PAD * S * 0.15} width={W - PAD * S * 0.3} height={H - PAD * S * 0.3} rx={14} fill="none" stroke="rgba(244,248,243,0.28)" strokeWidth={PAD * S * 0.7} />
       ) : (
@@ -113,6 +144,25 @@ export const FieldSvg = memo(function FieldSvg({ game, situation, compact = fals
           className="field-svg-redzone"
         />
       )}
+      {band && driveTeam && (
+        <>
+          <defs>
+            <linearGradient id={`${id}-drive`} x1={band.from} y1={0} x2={band.to} y2={0} gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor={driveTeam} stopOpacity={0.02} />
+              <stop offset="0.7" stopColor={driveTeam} stopOpacity={0.12} />
+              <stop offset="1" stopColor={driveTeam} stopOpacity={0.22} />
+            </linearGradient>
+          </defs>
+          <rect
+            x={Math.min(band.from, band.to)}
+            y={Z(-m.halfWidth)}
+            width={Math.abs(band.to - band.from)}
+            height={m.width * S}
+            fill={`url(#${id}-drive)`}
+            className="field-svg-drive"
+          />
+        </>
+      )}
       {yardLines}
       {hashes}
       {m.tryMark &&
@@ -137,6 +187,13 @@ export const FieldSvg = memo(function FieldSvg({ game, situation, compact = fals
             </text>
           </g>
         ))}
+      {band && driveTeam && (
+        <line x1={band.from} x2={band.from} y1={Z(-m.halfWidth)} y2={Z(m.halfWidth)} stroke={driveTeam} strokeWidth={3} strokeDasharray="14 10" opacity={0.6} className="field-svg-drive-start" />
+      )}
+      {driveTeam &&
+        driveTicks.map((play) => (
+          <rect key={`dt${play.id}`} x={X(play.to!) - 4} y={Z(m.halfWidth - 8)} width={8} height={4.5 * S} rx={2} fill={toneFill(play.tone, driveTeam)} opacity={0.9} className="field-svg-drive-tick" />
+        ))}
       {targetX !== null && target?.kind === 'line' && <rect x={targetX - 2.2} y={Z(-m.halfWidth)} width={4.4} height={m.width * S} fill="#f4aa5c" opacity={0.95} />}
       {target?.kind === 'goal' && offense && <rect x={(dir === 1 ? X(100) : X(0)) - 3} y={Z(-m.halfWidth)} width={6} height={m.width * S} fill="#f4aa5c" opacity={0.85} />}
       {ballX !== null && <rect x={ballX - 2.2} y={Z(-m.halfWidth)} width={4.4} height={m.width * S} fill="#8abef0" opacity={0.95} />}
@@ -151,7 +208,7 @@ export const FieldSvg = memo(function FieldSvg({ game, situation, compact = fals
           {offense && (
             <path
               d={`M ${ballX + dir * 30} ${ballZ - 11} L ${ballX + dir * 48} ${ballZ} L ${ballX + dir * 30} ${ballZ + 11} Z`}
-              fill="#a7f3d0"
+              fill={held ?? '#a7f3d0'}
               opacity={0.95}
             />
           )}

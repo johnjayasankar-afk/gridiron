@@ -1,7 +1,7 @@
 /**
  * Situation helpers shared by the server, the replay lab and the client.
  */
-import type { GameDetail, GameSummary, PlayEvent, Situation } from './model.js';
+import type { GameDetail, GameSummary, PlayEvent, Situation, Team } from './model.js';
 import { ADMIN_KINDS, isLiveOrPaused } from './model.js';
 
 /**
@@ -41,6 +41,42 @@ export function withDerivedSituation(detail: GameDetail): GameDetail {
  * a newer report without a situation does not erase a known situation while the
  * game is still live.
  */
+/**
+ * A team as the newest report describes it, keeping the branding that report left
+ * out.
+ *
+ * The provider does not put the same fields on a team in every payload: a
+ * scoreboard carries no logo variants at all, while the richer reports carry a
+ * dark one. Taking the newest team wholesale meant each poll erased what the
+ * other had found, and a logo flicked between its two addresses every few
+ * seconds, reloading the image each time.
+ *
+ * Only branding is kept this way. A name, a colour and a logo are what a team IS
+ * and cannot become unknown; a rank and a record are statements about how it is
+ * doing, which can change to nothing, so a report that leaves those out is
+ * allowed to clear them.
+ */
+export function mergeTeam(prev: Team, next: Team): Team {
+  if (prev.key !== next.key) return next;
+  const same =
+    next.logo === (next.logo ?? prev.logo) &&
+    next.logoDark === (next.logoDark ?? prev.logoDark) &&
+    next.color === (next.color ?? prev.color) &&
+    next.alternateColor === (next.alternateColor ?? prev.alternateColor) &&
+    next.location === (next.location ?? prev.location) &&
+    next.conferenceId === (next.conferenceId ?? prev.conferenceId);
+  if (same) return next;
+  return {
+    ...next,
+    logo: next.logo ?? prev.logo,
+    logoDark: next.logoDark ?? prev.logoDark,
+    color: next.color ?? prev.color,
+    alternateColor: next.alternateColor ?? prev.alternateColor,
+    location: next.location ?? prev.location,
+    conferenceId: next.conferenceId ?? prev.conferenceId,
+  };
+}
+
 export function mergeSummaries(prev: GameSummary, next: GameSummary): GameSummary {
   const prevAt = prev.receivedAt ?? 0;
   const nextAt = next.receivedAt ?? 0;
@@ -50,6 +86,8 @@ export function mergeSummaries(prev: GameSummary, next: GameSummary): GameSummar
   const heldProbability = prev.winProbability;
   return {
     ...next,
+    home: mergeTeam(prev.home, next.home),
+    away: mergeTeam(prev.away, next.away),
     divisions: next.source === 'summary' || next.divisions.length === 0 ? prev.divisions : next.divisions,
     situation,
     // Lines and the pre-game prediction change rarely, so a report without them does not erase them.
@@ -62,7 +100,14 @@ export function mergeSummaries(prev: GameSummary, next: GameSummary): GameSummar
     broadcasts: next.broadcasts.length ? next.broadcasts : prev.broadcasts,
     notes: next.notes.length ? next.notes : prev.notes,
     links: { gamePage: next.links.gamePage ?? prev.links.gamePage },
-    venue: next.venue ?? prev.venue,
+    /*
+     * A venue's own facts survive a report that left them out, the same rule the
+     * teams' branding follows: the summary payload names a venue without its id,
+     * its roof or its surface, and taking it wholesale would throw away what the
+     * scoreboard and the venue document had already found.
+     */
+    venue: next.venue && prev.venue && next.venue.name === prev.venue.name ? { ...next.venue, id: next.venue.id ?? prev.venue.id, indoor: next.venue.indoor ?? prev.venue.indoor, grass: next.venue.grass ?? prev.venue.grass } : (next.venue ?? prev.venue),
+    weather: next.weather ?? prev.weather,
     coverage: next.source === 'summary' && prev.coverage.level !== 'unknown' && next.coverage.level === 'unknown' ? prev.coverage : next.coverage,
   };
 }

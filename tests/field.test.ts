@@ -10,6 +10,7 @@ import {
   progressFromSchematicYard,
   progressFromYardsToEndzone,
   schematicYardFromProgress,
+  scoringZone,
   worldXFromProgress,
   yardsGained,
 } from '../shared/field';
@@ -81,6 +82,26 @@ describe('schematic orientation and render placement', () => {
     expect(worldXFromProgress(35, 'away')).toBe(-15);
     expect(worldXFromProgress(35, 'home')).toBe(15); // mirrored
     expect(worldXFromProgress(50, 'home')).toBe(0);
+  });
+
+  /**
+   * The field lights one end zone on a score and the arena answers in the same
+   * place, so both read this from one function. When they each decided for
+   * themselves they could disagree, and a touchdown would light one end while
+   * the crowd celebrated at the other.
+   */
+  it('names the end zone a scoring play reached, and falls back on who was attacking', () => {
+    // the away offense attacks the right, so its end zone is the positive one
+    expect(scoringZone(96, 'away')).toBe(1);
+    expect(scoringZone(4, 'home')).toBe(-1);
+    // an end spot away from either end zone is not evidence, so who was
+    // attacking decides instead of a spot in the middle of the field
+    expect(scoringZone(50, 'away')).toBe(1);
+    expect(scoringZone(50, 'home')).toBe(-1);
+    // and with nothing reported at all it still answers, rather than throwing
+    // away the score
+    expect(scoringZone(null, null)).toBe(1);
+    expect(scoringZone(null, 'home')).toBe(-1);
   });
 
   it('keeps the ball in the same place when possession changes hands', () => {

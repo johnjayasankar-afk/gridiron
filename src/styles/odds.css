@@ -434,6 +434,16 @@
   stroke-width: 1;
 }
 
+/*
+ * Each reading the book actually posted. A step line says where the line went;
+ * these say how often it went there, which is the difference between a book
+ * that moved once and one that moved eleven times to the same place.
+ */
+.odds-spark-step {
+  fill: var(--market);
+  opacity: 0.45;
+}
+
 .odds-spark-kick {
   stroke-dasharray: 2 2;
 }
@@ -470,5 +480,69 @@
 @container (max-height: 230px) {
   .wall .card-odds {
     display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- the market at a play */
+
+/*
+ * What the exchange's price was when the play being looked at happened. It sits
+ * where the live quote table sits, because it is the same reading taken at a
+ * different moment, and the block's own heading says which.
+ */
+.odds-atplay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.odds-move.is-up {
+  color: var(--live);
+}
+
+.odds-move.is-down {
+  color: var(--amber);
+}
+
+/* The point on the line the reading came from, so the number and the trend agree. */
+.odds-spark-at {
+  fill: var(--surface);
+  stroke: var(--live);
+  stroke-width: 1.8;
+}
+
+:root[data-theme='dark'] .odds-spark-at {
+  stroke: var(--mint-2);
+}
+
+/*
+ * A figure lights for a moment when a new one arrives. It is keyed on the value,
+ * so it only runs when the value actually changed, and the number itself never
+ * counts up through figures nobody reported.
+ */
+@keyframes odds-fresh {
+  from {
+    color: var(--live);
+  }
+  to {
+    color: inherit;
+  }
+}
+
+.odds-now.is-fresh {
+  animation: odds-fresh 900ms var(--ease) both;
+}
+
+:root[data-effects='2d'] .odds-now.is-fresh,
+:root[data-effects='reduced'] .odds-now.is-fresh {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .odds-now.is-fresh {
+    animation: none;
   }
 }

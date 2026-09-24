@@ -1,6 +1,6 @@
 /** Small builders for hand-written test scenarios. Every value is explicit in the test that uses it. */
 import { schematicYardFromProgress, type Side } from '../../shared/field';
-import type { BallSpot, GameDetail, GameStatusKind, GameSummary, LeagueId, PlayEvent, PlayKind, Situation, Team } from '../../shared/model';
+import type { BallSpot, Conversion, GameDetail, GameStatusKind, GameSummary, LeagueId, PlayEvent, PlayKind, Situation, Team } from '../../shared/model';
 import { UNKNOWN_SPOT } from '../../shared/model';
 
 export function team(abbreviation: string, league: LeagueId = 'nfl'): Team {
@@ -57,6 +57,7 @@ export interface GameOptions {
   divisions?: GameSummary['divisions'];
   homeTeam?: string;
   awayTeam?: string;
+  lines?: GameSummary['lines'];
 }
 
 export function game(o: GameOptions = {}): GameSummary {
@@ -92,7 +93,22 @@ export function game(o: GameOptions = {}): GameSummary {
     season: { year: 2026, type: 2, week: 1 },
     notes: [],
     coverage: { level: o.coverage ?? 'full', score: true, situation: live, playByPlay: o.coverage !== 'score-only', drives: o.coverage !== 'score-only', teamStats: o.coverage !== 'score-only', provider: 'test' },
+    ...(o.lines === undefined ? {} : { lines: o.lines }),
   };
+}
+
+/** A sportsbook reading: the home spread, the total, and both moneylines. */
+export function bettingLines(spread: number, total: number, home: number, away: number): GameSummary['lines'] {
+  const price = (line: number, odds: number) => ({ open: null, latest: { line, odds } });
+  return {
+    provider: 'Book',
+    favorite: spread < 0 ? 'home' : 'away',
+    details: null,
+    overUnder: total,
+    spread: { home: price(spread, -110), away: price(-spread, -110) },
+    total: { over: price(total, -110), under: price(total, -110) },
+    moneyline: { home: { open: null, latest: home }, away: { open: null, latest: away } },
+  } as GameSummary['lines'];
 }
 
 export interface PlayOptions {
@@ -113,6 +129,7 @@ export interface PlayOptions {
   scoring?: boolean;
   scoringTeam?: Side | null;
   turnover?: boolean;
+  conversion?: Conversion | null;
   penalty?: boolean;
   yards?: number | null;
   revision?: string;
@@ -146,7 +163,7 @@ export function play(o: PlayOptions): PlayEvent {
     turnover: o.turnover ?? false,
     penalty: o.penalty ?? false,
     possessionChanged: offense !== null && endOffense !== null ? offense !== endOffense : null,
-    conversion: null,
+    conversion: o.conversion ?? null,
     review: null,
     scoreAfter: { home: o.home ?? 0, away: o.away ?? 0 },
     modified: null,

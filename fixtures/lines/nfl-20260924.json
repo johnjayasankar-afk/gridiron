@@ -1,0 +1,26 @@
+{
+  "league": "nfl",
+  "dateKey": "20260924",
+  "provider": "DraftKings",
+  "capturedBy": "scripts/capture-lines.ts",
+  "games": {
+    "nfl-401872948": {
+      "name": "ATL @ GB",
+      "provider": "DraftKings",
+      "points": [
+        {
+          "at": "2026-09-24T19:19:24.332Z",
+          "spreadHome": -4.5,
+          "spreadAway": 4.5,
+          "spreadOddsHome": -115,
+          "spreadOddsAway": -105,
+          "total": 42.5,
+          "totalOddsOver": -118,
+          "totalOddsUnder": -102,
+          "moneylineHome": -245,
+          "moneylineAway": 200
+        }
+      ]
+    }
+  }
+}

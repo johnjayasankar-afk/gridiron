@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-14T20:40:14.736Z",
+  "recordedAt": "2026-09-24T21:01:22.901Z",
   "environment": "Production build, replay mode (nfl-week1-sunday from 35%, 60x), headless Chrome via Playwright, viewport 1920x3200",
   "summary": {
     "cards": 13,
@@ -8,81 +8,81 @@
     "atmosphereCanvases": 1,
     "longTasksOver50ms": 0,
     "longestTaskMs": 0,
-    "jsHeapMB": 34,
-    "moments": 14
+    "jsHeapMB": 26,
+    "moments": 15
   },
   "samples": [
     {
-      "at": 5975,
+      "at": 6125,
+      "calls": 189,
+      "triangles": 24450,
+      "geometries": 25,
+      "textures": 46,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.78,
+      "frames": 202
+    },
+    {
+      "at": 11173,
+      "calls": 189,
+      "triangles": 24452,
+      "geometries": 25,
+      "textures": 46,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 2.55,
+      "frames": 377
+    },
+    {
+      "at": 16222,
       "calls": 176,
-      "triangles": 25884,
-      "geometries": 24,
-      "textures": 33,
-      "programs": 10,
-      "views": 13,
-      "dpr": 1,
-      "frameMs": 1.48,
-      "frames": 138
-    },
-    {
-      "at": 11023,
-      "calls": 173,
-      "triangles": 25880,
-      "geometries": 24,
-      "textures": 33,
-      "programs": 10,
-      "views": 13,
-      "dpr": 1,
-      "frameMs": 1.97,
-      "frames": 288
-    },
-    {
-      "at": 16073,
-      "calls": 165,
-      "triangles": 24886,
-      "geometries": 22,
-      "textures": 33,
-      "programs": 10,
-      "views": 13,
-      "dpr": 1,
-      "frameMs": 1.72,
-      "frames": 405
-    },
-    {
-      "at": 21125,
-      "calls": 138,
-      "triangles": 23354,
-      "geometries": 24,
-      "textures": 33,
-      "programs": 10,
-      "views": 13,
-      "dpr": 1,
-      "frameMs": 1.77,
-      "frames": 641
-    },
-    {
-      "at": 26174,
-      "calls": 164,
-      "triangles": 24884,
-      "geometries": 24,
-      "textures": 33,
-      "programs": 10,
-      "views": 13,
-      "dpr": 1,
-      "frameMs": 1.73,
-      "frames": 810
-    },
-    {
-      "at": 31223,
-      "calls": 162,
-      "triangles": 24880,
+      "triangles": 23740,
       "geometries": 23,
-      "textures": 33,
+      "textures": 46,
       "programs": 10,
       "views": 13,
       "dpr": 1,
-      "frameMs": 1.87,
-      "frames": 893
+      "frameMs": 2.1,
+      "frames": 519
+    },
+    {
+      "at": 21273,
+      "calls": 151,
+      "triangles": 22796,
+      "geometries": 25,
+      "textures": 46,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.95,
+      "frames": 754
+    },
+    {
+      "at": 26340,
+      "calls": 177,
+      "triangles": 23742,
+      "geometries": 25,
+      "textures": 46,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 2.01,
+      "frames": 949
+    },
+    {
+      "at": 31393,
+      "calls": 162,
+      "triangles": 23702,
+      "geometries": 25,
+      "textures": 46,
+      "programs": 10,
+      "views": 13,
+      "dpr": 1,
+      "frameMs": 1.99,
+      "frames": 1062
     }
   ]
 }

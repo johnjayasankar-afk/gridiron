@@ -4,8 +4,9 @@
  * The win probability series and market price history travel only when they changed.
  * A client that does not hold `baseVersion` must fetch the full detail instead.
  */
+import { sameLineHistory } from './lineHistory.js';
 import { sameHistory } from './marketHistory.js';
-import type { GameDetail, MarketHistory, PlayEvent, WinProbabilityPoint } from './model.js';
+import type { GameDetail, LineHistory, MarketHistory, PlayEvent, WinProbabilityPoint } from './model.js';
 
 export interface DetailDelta {
   gameId: string;
@@ -27,6 +28,7 @@ export interface DetailDelta {
   winProbability?: WinProbabilityPoint[];
   /** The whole market price history, present only when it changed; null when it was removed. */
   marketHistory?: MarketHistory | null;
+  lineHistory?: LineHistory | null;
 }
 
 function sameSeries(a: WinProbabilityPoint[] = [], b: WinProbabilityPoint[] = []): boolean {
@@ -61,6 +63,7 @@ export function computeDetailDelta(prev: GameDetail | null, next: GameDetail, ba
     order: next.plays.map((p) => p.id),
     ...(sameSeries(prev?.winProbability, next.winProbability) ? {} : { winProbability: next.winProbability ?? [] }),
     ...(sameHistory(prev?.marketHistory, next.marketHistory) ? {} : { marketHistory: next.marketHistory ?? null }),
+    ...(sameLineHistory(prev?.lineHistory, next.lineHistory) ? {} : { lineHistory: next.lineHistory ?? null }),
   };
 }
 
@@ -76,6 +79,7 @@ export function applyDetailDelta(prev: GameDetail, delta: DetailDelta): GameDeta
   });
   const winProbability = delta.winProbability ?? prev.winProbability;
   const marketHistory = delta.marketHistory !== undefined ? delta.marketHistory : prev.marketHistory;
+  const lineHistory = delta.lineHistory !== undefined ? delta.lineHistory : prev.lineHistory;
   return {
     gameId: prev.gameId,
     summary: delta.summary,
@@ -89,5 +93,6 @@ export function applyDetailDelta(prev: GameDetail, delta: DetailDelta): GameDeta
     plays,
     ...(winProbability ? { winProbability } : {}),
     ...(marketHistory ? { marketHistory } : {}),
+    ...(lineHistory ? { lineHistory } : {}),
   };
 }

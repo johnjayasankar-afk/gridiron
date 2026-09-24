@@ -9,6 +9,12 @@ export interface Inspection {
   /** Play order being shown; null means live. */
   order: number | null;
   playing: boolean;
+  /**
+   * Playing the game's scoring plays one after another rather than every play.
+   * Each one is drawn rather than jumped to, which is the difference between a
+   * recap and a list.
+   */
+  reel: boolean;
   speed: 0.5 | 1 | 2 | 4;
   /** Restrict stepping and playback to one drive. */
   driveId: string | null;

@@ -90,7 +90,7 @@ const HOLO: TurfPalette = {
   numberBlur: 10,
 };
 
-function paintField(canvas: HTMLCanvasElement, m: FieldMarkings, style: FieldStyle) {
+function paintField(canvas: HTMLCanvasElement, m: FieldMarkings, style: FieldStyle, surface: FieldSurface) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const p = style === 'holo' ? HOLO : CLASSIC;
@@ -118,19 +118,37 @@ function paintField(canvas: HTMLCanvasElement, m: FieldMarkings, style: FieldSty
     ctx.fillRect(X(-30), Z(hw), 60 * sx, b * sz);
   }
 
-  // Turf: end zones, then five-yard mowing stripes between the goal lines.
+  /*
+   * Turf: end zones, then the field between the goal lines.
+   *
+   * Mowing stripes are a grass field's: a mower laying the blades one way and
+   * then the other is what makes them, and an artificial surface has no blades
+   * to lay. The provider reports which a venue has, so a synthetic field is
+   * drawn as one flat weave with a seam every five yards where its rolls meet,
+   * and a grass field keeps its stripes. Where the surface is not reported the
+   * field is striped, which is what every field looked like before it was.
+   */
   ctx.fillStyle = p.endZone;
   ctx.fillRect(X(-60), Z(-hw), 10 * sx, m.width * sz);
   ctx.fillRect(X(50), Z(-hw), 10 * sx, m.width * sz);
+  const mown = surface !== 'turf';
   for (let i = 0; i < 20; i++) {
-    ctx.fillStyle = p.stripes[i % 2];
+    ctx.fillStyle = mown ? p.stripes[i % 2] : p.stripes[0];
     ctx.fillRect(X(-50 + i * 5), Z(-hw), 5 * sx + 1, m.width * sz);
   }
   let seed = m.league === 'nfl' ? 1979 : 1869;
   const rand = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-  for (let i = 0; i < p.speckles; i++) {
+  // A synthetic surface is more uniform than grass, and its roll seams are the one line across it.
+  const speckles = mown ? p.speckles : Math.round(p.speckles * 1.5);
+  for (let i = 0; i < speckles; i++) {
     ctx.fillStyle = rand() > 0.5 ? p.speckle[0] : p.speckle[1];
-    ctx.fillRect(X(-60) + rand() * 120 * sx, Z(-hw) + rand() * m.width * sz, 1.6, 1.6);
+    ctx.fillRect(X(-60) + rand() * 120 * sx, Z(-hw) + rand() * m.width * sz, mown ? 1.6 : 1.1, mown ? 1.6 : 1.1);
+  }
+  if (!mown) {
+    ctx.fillStyle = p.stripes[1];
+    ctx.globalAlpha = 0.5;
+    for (let i = 1; i < 20; i++) ctx.fillRect(X(-50 + i * 5) - 0.5, Z(-hw), 1, m.width * sz);
+    ctx.globalAlpha = 1;
   }
   if (p.grid) {
     ctx.fillStyle = p.grid;
@@ -216,21 +234,24 @@ function paintField(canvas: HTMLCanvasElement, m: FieldMarkings, style: FieldSty
 
 const fieldTextures = new Map<string, THREE.CanvasTexture>();
 
-export function getFieldTexture(league: LeagueId, maxAnisotropy: number, style: FieldStyle = 'holo'): THREE.CanvasTexture {
-  const key = `${league}|${style}`;
+/** What a venue is played on, where the provider says; null where it does not. */
+export type FieldSurface = 'grass' | 'turf' | null;
+
+export function getFieldTexture(league: LeagueId, maxAnisotropy: number, style: FieldStyle = 'holo', surface: FieldSurface = null): THREE.CanvasTexture {
+  const key = `${league}|${style}|${surface ?? 'unknown'}`;
   let texture = fieldTextures.get(key);
   if (!texture) {
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
     canvas.height = 1024;
     const m = markingsFor(league);
-    paintField(canvas, m, style);
+    paintField(canvas, m, style, surface);
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = Math.min(8, Math.max(1, maxAnisotropy));
     if (!fontsReady) {
       afterFonts.push(() => {
-        paintField(canvas, m, style);
+        paintField(canvas, m, style, surface);
         t.needsUpdate = true;
       });
     }
@@ -412,12 +433,18 @@ function radialTexture(stops: Array<[number, string]>, size = 128): THREE.Canvas
 let halo: THREE.CanvasTexture | null = null;
 let shadow: THREE.CanvasTexture | null = null;
 let spark: THREE.CanvasTexture | null = null;
+let pool: THREE.CanvasTexture | null = null;
 
+/**
+ * The soft mark under the ball. It is white so the material can tint it, because
+ * it carries the colour of whichever team the provider says has the ball; a
+ * coloured ramp multiplied by a team's colour came out muddy.
+ */
 export const haloTexture = () =>
   (halo ??= radialTexture([
-    [0, 'rgba(190, 248, 222, 0.9)'],
-    [0.28, 'rgba(110, 231, 183, 0.45)'],
-    [1, 'rgba(110, 231, 183, 0)'],
+    [0, 'rgba(255, 255, 255, 0.9)'],
+    [0.28, 'rgba(255, 255, 255, 0.45)'],
+    [1, 'rgba(255, 255, 255, 0)'],
   ]));
 
 export const shadowTexture = () =>
@@ -426,6 +453,22 @@ export const shadowTexture = () =>
     [0.55, 'rgba(0, 0, 0, 0.32)'],
     [1, 'rgba(0, 0, 0, 0)'],
   ]));
+
+/**
+ * The wide, soft pool a floodlight throws on the ground. Far gentler than the
+ * spark: a field lit by towers is bright under them and falls away, and without
+ * it a holographic field reads as lighting itself.
+ */
+export const poolTexture = () =>
+  (pool ??= radialTexture(
+    [
+      [0, 'rgba(255, 255, 255, 0.9)'],
+      [0.42, 'rgba(255, 255, 255, 0.42)'],
+      [0.76, 'rgba(255, 255, 255, 0.13)'],
+      [1, 'rgba(255, 255, 255, 0)'],
+    ],
+    256,
+  ));
 
 /** A white point of light for sparks and seat lights; materials tint it. */
 export const sparkTexture = () =>
@@ -437,6 +480,263 @@ export const sparkTexture = () =>
     ],
     64,
   ));
+
+// ---------------------------------------------------------------- the ball's own skin
+
+/*
+ * A football wearing the mark of the team the provider says has it.
+ *
+ * Real footballs carry no team mark, and this one is not pretending to: the
+ * field is a schematic, and a ball that says whose it is answers the question
+ * every card is asked first. It is only ever built for the game page, where the
+ * ball is big enough for a mark to be read; a card says the same thing with the
+ * colour of the arrow and of the mark on the ground.
+ *
+ * The lathe the ball is built from lays its texture out with u running around
+ * the ball and v along it. The laces sit at u = 0.75, so the two decals go at
+ * 0.60 and 0.90: on the upper flanks either side of the laces, which is what an
+ * elevated camera sees. They sit on a light disc, because a team's own logo is
+ * often its own colour and would vanish on a disc of it.
+ */
+const LEATHER = '#7b4a2a';
+const BALL_SKIN_W = 512;
+const BALL_SKIN_H = 256;
+
+const logoImages = new Map<string, HTMLImageElement | 'failed'>();
+
+function loadLogo(url: string, onReady: () => void): HTMLImageElement | null {
+  const cached = logoImages.get(url);
+  if (cached) return cached === 'failed' ? null : cached;
+  const image = new Image();
+  // Without this the texture is tainted and the whole canvas is unusable; with
+  // it a provider that does not allow it simply fails to load and the ball
+  // wears the team's letters instead.
+  image.crossOrigin = 'anonymous';
+  image.onload = () => {
+    logoImages.set(url, image);
+    onReady();
+  };
+  image.onerror = () => {
+    logoImages.set(url, 'failed');
+  };
+  image.src = url;
+  return null;
+}
+
+function paintBallSkin(canvas: HTMLCanvasElement, team: Team, logo: HTMLImageElement | null) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = LEATHER;
+  ctx.fillRect(0, 0, w, h);
+
+  // Pebble grain, deterministic so the same team is the same ball every time.
+  let seed = 4157;
+  const rand = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let i = 0; i < 5200; i++) {
+    ctx.fillStyle = rand() > 0.5 ? 'rgba(255, 238, 220, 0.05)' : 'rgba(28, 12, 4, 0.1)';
+    ctx.fillRect(rand() * w, rand() * h, 2, 2);
+  }
+
+  const accent = accentFor(team.color, false);
+  for (const u of [0.6, 0.9]) {
+    const size = Math.min(w * 0.16, h * 0.34);
+    ctx.save();
+    ctx.translate(u * w, h * 0.5);
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.66, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(247, 250, 246, 0.95)';
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, size * 0.09);
+    ctx.strokeStyle = withAlpha(accent, 0.95);
+    ctx.stroke();
+    if (logo) ctx.drawImage(logo, -size * 0.45, -size * 0.45, size * 0.9, size * 0.9);
+    else if (fontsReady) {
+      ctx.fillStyle = accent;
+      ctx.font = `700 ${Math.round(size * 0.44)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(team.abbreviation.slice(0, 3), 0, size * 0.03);
+    }
+    ctx.restore();
+  }
+}
+
+interface SkinEntry {
+  texture: THREE.CanvasTexture;
+  canvas: HTMLCanvasElement;
+  /** The logo this ball was painted with, so a later one can replace letters. */
+  logoUrl: string | null;
+  refs: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+const ballSkins = new Map<string, SkinEntry>();
+
+/*
+ * Keyed on the team and its colour, and deliberately NOT on the logo's address.
+ * The provider hands out more than one address for the same mark: a game page
+ * starts with `500/ari.png` from the scoreboard and is given
+ * `500/scoreboard/ari.png` once the game's own detail arrives. Keying on the
+ * address meant every ball was painted twice and every logo fetched twice, for
+ * two files of the same picture.
+ */
+export const ballSkinKey = (team: Team): string => `${team.key}|${team.color ?? ''}`;
+
+export function acquireBallSkin(team: Team): THREE.CanvasTexture {
+  const key = ballSkinKey(team);
+  let entry = ballSkins.get(key);
+  const paint = (into: SkinEntry) => {
+    into.logoUrl = team.logo ?? null;
+    paintBallSkin(into.canvas, team, team.logo ? loadLogo(team.logo, () => paint(into)) : null);
+    into.texture.needsUpdate = true;
+    notifyChanged();
+  };
+  if (!entry) {
+    const canvas = document.createElement('canvas');
+    canvas.width = BALL_SKIN_W;
+    canvas.height = BALL_SKIN_H;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    entry = { texture, canvas, logoUrl: null, refs: 0, timer: null };
+    ballSkins.set(key, entry);
+    paint(entry);
+    if (!fontsReady) afterFonts.push(() => paint(entry!));
+  } else if (!entry.logoUrl && team.logo) {
+    // A mark arrived after the ball had been drawn with the team's letters.
+    paint(entry);
+  }
+  return entry.texture;
+}
+
+export function retainBallSkin(key: string) {
+  const entry = ballSkins.get(key);
+  if (!entry) return;
+  entry.refs++;
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+}
+
+export function releaseBallSkin(key: string) {
+  const entry = ballSkins.get(key);
+  if (!entry) return;
+  entry.refs = Math.max(0, entry.refs - 1);
+  if (entry.refs === 0 && !entry.timer) {
+    entry.timer = setTimeout(() => {
+      if (entry.refs > 0) return;
+      entry.texture.dispose();
+      ballSkins.delete(key);
+    }, 30_000);
+  }
+}
+
+// ---------------------------------------------------------------- the mark at midfield
+
+/*
+ * The home team's mark at the fifty.
+ *
+ * It is the one thing that makes a real field that team's field, and without it
+ * every game in the app was played on the same field with different end zones.
+ * It is the same liberty the end zones already take: the provider does not say
+ * what is painted at midfield, and this is a schematic field, but a home team is
+ * reported and its mark is the convention every real field follows.
+ *
+ * Painted into the turf rather than sat on top of it: on grass it is ink at part
+ * strength, and on the holographic field the material adds it as light instead.
+ * Drawn per team and per style, and reference counted like the end zones, so a
+ * slate of thirteen games keeps thirteen of them and no more.
+ */
+/** A card draws the mark about sixty pixels across; the game page draws it large. */
+const MIDFIELD_PX = { high: 512, low: 256 } as const;
+const midfields = new Map<string, { texture: THREE.CanvasTexture; canvas: HTMLCanvasElement; logoUrl: string | null; refs: number; timer: ReturnType<typeof setTimeout> | null }>();
+
+export const midfieldKey = (team: Team, style: FieldStyle, level: TextureLevel): string => `${team.key}|${team.color ?? ''}|${style}|${level}`;
+
+function paintMidfield(canvas: HTMLCanvasElement, team: Team, style: FieldStyle, logo: HTMLImageElement | null) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const size = canvas.width;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+  const holo = style === 'holo';
+  const accent = accentFor(team.color, holo);
+
+  if (logo) {
+    // A logo is drawn as it is and then knocked back, so a team's own colours
+    // survive. Turf shows through it either way.
+    ctx.globalAlpha = holo ? 0.72 : 0.5;
+    ctx.drawImage(logo, size * 0.06, size * 0.06, size * 0.88, size * 0.88);
+    ctx.globalAlpha = 1;
+    return;
+  }
+  if (!fontsReady) return;
+  // No logo: the team's letters in a ring, which is the other thing real fields
+  // paint at the fifty.
+  ctx.strokeStyle = withAlpha(accent, holo ? 0.75 : 0.5);
+  ctx.lineWidth = size * 0.035;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size * 0.4, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = withAlpha(accent, holo ? 0.82 : 0.55);
+  ctx.font = `700 ${Math.round(size * 0.3)}px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(team.abbreviation.slice(0, 4), size / 2, size / 2 + size * 0.02);
+}
+
+export function acquireMidfield(team: Team, style: FieldStyle, level: TextureLevel): THREE.CanvasTexture {
+  const key = midfieldKey(team, style, level);
+  let entry = midfields.get(key);
+  // The dark variant is the one made for a dark background, which is what the
+  // holographic field is.
+  const url = (style === 'holo' ? (team.logoDark ?? team.logo) : team.logo) ?? null;
+  const paint = (into: NonNullable<typeof entry>) => {
+    into.logoUrl = url;
+    paintMidfield(into.canvas, team, style, url ? loadLogo(url, () => paint(into)) : null);
+    into.texture.needsUpdate = true;
+    notifyChanged();
+  };
+  if (!entry) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = MIDFIELD_PX[level];
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    entry = { texture, canvas, logoUrl: null, refs: 0, timer: null };
+    midfields.set(key, entry);
+    paint(entry);
+    if (!fontsReady) afterFonts.push(() => paint(entry!));
+  } else if (!entry.logoUrl && url) paint(entry);
+  return entry.texture;
+}
+
+export function retainMidfield(key: string) {
+  const entry = midfields.get(key);
+  if (!entry) return;
+  entry.refs++;
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+}
+
+export function releaseMidfield(key: string) {
+  const entry = midfields.get(key);
+  if (!entry) return;
+  entry.refs = Math.max(0, entry.refs - 1);
+  if (entry.refs === 0 && !entry.timer) {
+    entry.timer = setTimeout(() => {
+      if (entry.refs > 0) return;
+      entry.texture.dispose();
+      midfields.delete(key);
+    }, 30_000);
+  }
+}
 
 export type FadeKind = 'up' | 'down' | 'along';
 const fades = new Map<FadeKind, THREE.CanvasTexture>();

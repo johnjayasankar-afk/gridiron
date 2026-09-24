@@ -9,7 +9,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import type { PointerState } from './frameBus';
+import type { BallTrack, PointerState } from './frameBus';
 
 function useElementSize(track: RefObject<HTMLElement | null>, onSize: (width: number, height: number) => void) {
   useLayoutEffect(() => {
@@ -217,9 +217,11 @@ export interface DetailCameraProps {
   zoomRequest: { token: number; factor: number };
   /** Opening the page flies the camera in from above (Full effects only). */
   flyIn?: boolean;
+  /** Where the ball is, so the broadcast camera can pan with a play as it runs. */
+  ball?: BallTrack | null;
 }
 
-export function DetailCamera({ track, preset, resetToken, focusX, reducedMotion, zoomEnabled, zoomRequest, flyIn = false }: DetailCameraProps) {
+export function DetailCamera({ track, preset, resetToken, focusX, reducedMotion, zoomEnabled, zoomRequest, flyIn = false, ball = null }: DetailCameraProps) {
   const set = useThree((s) => s.set);
   const invalidate = useThree((s) => s.invalidate);
   const camera = useMemo(() => {
@@ -289,9 +291,34 @@ export function DetailCamera({ track, preset, resetToken, focusX, reducedMotion,
     moveTo({ position: c.target.clone().add(offset.setLength(distance)), target: c.target.clone() }, !reducedMotion);
   }, [zoomRequest.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useFrame(() => {
+  const panned = useRef(0);
+
+  useFrame((_, delta) => {
     const tw = tween.current;
     const c = controls.current;
+    /*
+     * The broadcast camera pans with the ball while a play runs, instead of
+     * waiting for it to stop and then cutting to where it ended. It is a pan
+     * along the field and nothing else: the camera keeps its own height, angle
+     * and distance, which is what a camera on a sideline actually does, and it
+     * lags a little rather than tracking the ball exactly.
+     *
+     * It gives way to everything else. A preset, a reset or a zoom is a tween
+     * and takes over, and once the viewer has turned the camera themselves it
+     * never moves again on its own.
+     */
+    if (!tw && c && ball?.live && preset === 'broadcast' && !userMoved.current && !reducedMotion) {
+      const want = ball.x * 0.8;
+      const step = 1 - Math.exp(-Math.min(0.1, delta) / 0.28);
+      const move = (want - c.target.x) * step;
+      if (Math.abs(move) > 0.001) {
+        c.target.x += move;
+        camera.position.x += move;
+        panned.current += move;
+        c.update();
+        invalidate();
+      }
+    }
     if (!tw || !c) return;
     const t = Math.min(1, (performance.now() - tw.start) / tw.duration);
     const e = easeInOut(t);

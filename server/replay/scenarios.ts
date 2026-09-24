@@ -8,9 +8,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PriceCandle } from '../../shared/marketHistory.js';
-import type { Division, LeagueId } from '../../shared/model.js';
+import type { Division, LeagueId, LinePoint } from '../../shared/model.js';
 import { easternDateKey } from '../../shared/util.js';
-import { buildTimeline, type CapturedContract, type GameTimeline } from './timeline.js';
+import { buildTimeline, type CapturedContract, type CapturedLines, type GameTimeline } from './timeline.js';
 
 type Raw = Record<string, any>;
 
@@ -48,6 +48,11 @@ export class FixtureStore {
   market(league: LeagueId, dateKey: string): Raw | null {
     return this.json(join('..', 'kalshi', `${league}-${dateKey}.json`));
   }
+
+  /** Sportsbook lines recorded for one league and provider day, kept beside the ESPN fixtures in fixtures/lines. */
+  lines(league: LeagueId, dateKey: string): Raw | null {
+    return this.json(join('..', 'lines', `${league}-${dateKey}.json`));
+  }
 }
 
 const finiteOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -79,6 +84,52 @@ export function withCapturedMarket(fx: FixtureStore, tl: GameTimeline): GameTime
   const home = capturedContract(game.home);
   const away = capturedContract(game.away);
   if (home || away) tl.market = { source: typeof file?.source === 'string' ? file.source : 'Kalshi', event: String(game.event ?? ''), home, away };
+  return tl;
+}
+
+/** One recorded reading, refused rather than repaired when a field is not a number. */
+function capturedPoint(raw: unknown): LinePoint | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Raw;
+  if (typeof r.at !== 'string' || !Number.isFinite(Date.parse(r.at))) return null;
+  return {
+    at: r.at,
+    spreadHome: finiteOrNull(r.spreadHome),
+    spreadAway: finiteOrNull(r.spreadAway),
+    spreadOddsHome: finiteOrNull(r.spreadOddsHome),
+    spreadOddsAway: finiteOrNull(r.spreadOddsAway),
+    total: finiteOrNull(r.total),
+    totalOddsOver: finiteOrNull(r.totalOddsOver),
+    totalOddsUnder: finiteOrNull(r.totalOddsUnder),
+    moneylineHome: finiteOrNull(r.moneylineHome),
+    moneylineAway: finiteOrNull(r.moneylineAway),
+  };
+}
+
+/**
+ * The sportsbook line recorded while this game ran, if anybody was recording.
+ *
+ * Unlike the exchange's prices, which can be asked for after the fact, a book's
+ * line can only be known for a game somebody watched: the provider reports an
+ * opening line and a closing one, and its own movement collection is always
+ * empty. A scenario with no recording simply replays without one.
+ */
+export function withCapturedLines(fx: FixtureStore, tl: GameTimeline): GameTimeline {
+  const scheduled = Date.parse(tl.event.date ?? tl.event.competitions?.[0]?.date);
+  if (!Number.isFinite(scheduled)) return tl;
+  let file: Raw | null;
+  try {
+    file = fx.lines(tl.league, easternDateKey(new Date(scheduled)));
+  } catch {
+    // An unreadable recording leaves the replay without a line rather than stopping it.
+    return tl;
+  }
+  const game = file?.games?.[tl.id] as Raw | undefined;
+  const points = Array.isArray(game?.points) ? (game.points as unknown[]).map(capturedPoint).filter((p): p is LinePoint => p !== null) : [];
+  if (!points.length) return tl;
+  points.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const captured: CapturedLines = { provider: typeof game?.provider === 'string' ? game.provider : (typeof file?.provider === 'string' ? file.provider : 'Sportsbook'), points };
+  tl.lines = captured;
   return tl;
 }
 
@@ -257,6 +308,37 @@ export const SCENARIOS: ScenarioDef[] = [
       if (k < 0 || k + 8 >= tl.plays.length) return null;
       tl.edits.push({ kind: 'strip-spot', from: tl.plays[k].t, until: tl.plays[k + 8].t });
       return { date: '20260913', games: [tl], startAt: tl.plays[k].t - 2 * MIN, endAt: tl.plays[k + 8].t + 4 * MIN, limitations: ['Synthetic test scenario: the real feed reported these spots.'], outages: [] };
+    },
+  },
+  {
+    id: 'test-weather',
+    label: 'Test scenario · Snow at the venue, at night (synthetic)',
+    description: "Built on a real game, with the provider's weather at the venue replaced by snow after dark on a grass field. The real game was played in the dry. Not real weather.",
+    synthetic: true,
+    speed: 6,
+    build(fx) {
+      const tl = singleGame(fx, BASE_GAME.league, BASE_GAME.id, BASE_GAME.rel, ['NFL']);
+      if (!tl) return null;
+      /*
+       * A way to see a sky, because no captured scenario has one: the weather at
+       * a venue is on the live scoreboard and was not captured with these games.
+       * Condition 44 is the provider's own id for snow after dark, one of the
+       * night forms 33 to 44, so this is the shape a real report takes with
+       * numbers that did not happen. Everything downstream, from how the field is
+       * lit to what falls on it, reads it exactly as it reads a real one.
+       */
+      tl.event = { ...tl.event, weather: { conditionId: 44, temperature: 24, displayValue: 'Snow' } };
+      const comp = tl.event.competitions[0];
+      tl.event.competitions = [{ ...comp, venue: { ...comp.venue, indoor: false, grass: true } }];
+      const k = Math.max(0, Math.floor(tl.plays.length * 0.3));
+      return {
+        date: '20260913',
+        games: [tl],
+        startAt: tl.plays[k].t - 2 * MIN,
+        endAt: tl.plays[Math.min(tl.plays.length - 1, k + 40)].t + 4 * MIN,
+        limitations: ['Synthetic test scenario: the provider reported no snow at this game.'],
+        outages: [],
+      };
     },
   },
   {

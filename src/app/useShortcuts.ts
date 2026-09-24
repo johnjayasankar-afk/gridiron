@@ -16,10 +16,12 @@ export const SHORTCUTS: Array<{ keys: string[]; label: string }> = [
   { keys: ['1'], label: 'Slate' },
   { keys: ['2'], label: 'Focus' },
   { keys: ['3'], label: 'Wall' },
+  { keys: ['4'], label: 'Tape' },
   { keys: ['J', 'K'], label: 'Next or previous game card; arrow keys move across the grid once a card has focus' },
   { keys: ['P'], label: 'Pin or unpin the focused game' },
   { keys: ['F'], label: 'Add the focused game to Focus, or take it out' },
   { keys: ['[', ']'], label: 'Previous or next game on a game page' },
+  { keys: ['R'], label: 'Play the scores on a game page: every scoring play in order, drawn on the field' },
   { keys: ['L'], label: 'Back to live: live day on the slate, latest play on a game page' },
   { keys: ['M'], label: 'Show or hide moments' },
   { keys: ['?'], label: 'Keyboard shortcuts' },
@@ -120,6 +122,9 @@ export function useShortcuts() {
         case '3':
           navigate({ name: 'wall' });
           break;
+        case '4':
+          navigate({ name: 'tape' });
+          break;
         case 'j':
         case 'J':
           if (route.name === 'game' || !stepCard(1)) return;
@@ -152,6 +157,16 @@ export function useShortcuts() {
           const next = adjacentGameId(route.id, e.key === ']' ? 1 : -1);
           if (!next) return;
           navigate({ name: 'game', id: next });
+          break;
+        }
+        case 'r':
+        case 'R': {
+          // The reel finds its own first score; the driver on the game page does
+          // that, so this only has to say whether it is running.
+          if (route.name !== 'game') return;
+          const current = useUi.getState().inspection;
+          if (!current || current.gameId !== route.id) return;
+          useUi.getState().patchInspection({ reel: !current.reel, playing: false });
           break;
         }
         case 'l':

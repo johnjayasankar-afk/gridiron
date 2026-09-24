@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { describeProgress } from '../../../shared/field';
 import { downDistance, spotLabel, teamFor } from '../../../shared/format';
 import type { BallSpot, GameDetail, GameLeader, GameSummary, LeaderAthlete, Side, Situation } from '../../../shared/model';
+import { skyFor, skyLabel } from '../../../shared/sky';
 import { DIVISION_LABEL, isLiveOrPaused } from '../../../shared/model';
 import { driveResultLabel, inspectablePlays, type CatchUpSummary, type PlayFrame } from '../../../shared/replayFrames';
 import { periodLong, periodShort } from '../../../shared/util';
@@ -101,6 +102,8 @@ export function SituationPanel({ game, situation, lastKnown, frame }: { game: Ga
   const offense = teamFor(game, situation?.possession ?? null);
   const live = isLiveOrPaused(game.status.kind);
   const heading = frame ? `Historical view · play ${frame.index + 1} of ${frame.total}` : lastKnown ? 'Last known situation' : live ? 'Situation' : 'Game state';
+  // The sky the field is lit by, which is only in words here.
+  const sky = skyFor(game.weather, game.venue?.indoor);
 
   return (
     <section className="panel situation-panel" aria-label="Situation">
@@ -144,7 +147,13 @@ export function SituationPanel({ game, situation, lastKnown, frame }: { game: Ga
       )}
       <p className="sit-note">
         Schematic field: {game.away.abbreviation} defends the left end zone.{' '}
-        {known && spot?.lateral != null ? 'The ball is drawn across the field at the lateral position in the data.' : 'The ball sits on the centre line because no lateral position is reported.'}
+        {known && spot?.lateral != null ? 'The ball is drawn across the field at the lateral position in the data.' : 'The ball sits on the centre line because no lateral position is reported.'}{' '}
+        {/*
+          What the field is lit by, in words. The caption under the field says the
+          same thing and is hidden from screen readers because it repeats this
+          panel; the sky is only in this sentence, so it has to be here.
+        */}
+        {sky && (sky.indoor ? `The venue has a roof, so the field is lit from above and nothing falls on it.` : `Reported at the venue: ${skyLabel(sky)}${sky.night ? ', after dark' : ''}.`)}
       </p>
     </section>
   );

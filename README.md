@@ -13,11 +13,13 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 ## Contents
 
 - [What is in it](#what-is-in-it)
+- [The tape](#the-tape)
 - [Run it](#run-it)
 - [Deploy](#deploy)
 - [Data sources and coverage limits](#data-sources-and-coverage-limits)
 - [How updates work](#how-updates-work)
 - [Odds and win probability](#odds-and-win-probability)
+- [The sky over the field](#the-sky-over-the-field)
 - [Reading the field: schematic conventions](#reading-the-field-schematic-conventions)
 - [Replay lab](#replay-lab)
 - [Alerts](#alerts)
@@ -36,6 +38,7 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 - **While you were away.** Come back after 4 minutes or more, or reopen Gridiron later the same day, and the slate opens with what was reported in the meantime. It lists scores, turnovers, kickoffs and finals for each game, and each play links to its view on the field. It is built only from snapshots of reported data.
 - **Focus.** One, two or four games at a large size. Each slot can be replaced, moved or cleared.
 - **Wall.** Full screen, 4, 9 or 16 games, compact or comfortable, with an exit control and Escape.
+- **The tape.** The whole day on one clock: every game a lane, the reported win probability drawn across the afternoon as the distance from an even chance. A close game is a thin line down the middle, a decided one a thick band, and a game that turned crosses the middle at the moment it turned. Pointing anywhere reads every game at that moment at once, and clicking opens that game at the play that was live then. Every card carries the same ribbon at card size, so the slate shows the shape behind the score. See [The tape](#the-tape).
 - **Director mode** in Focus and on the wall. The first Focus slot, or a large wall tile, follows the most important live situation and names the reason.
   - It holds a game for at least 45 seconds and cuts in for a touchdown, turnover, safety, lead change or overtime elsewhere.
   - **Stay** holds the current game and **Skip** sets it aside for 3 minutes.
@@ -43,9 +46,11 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 - **Game page** at `/game/<id>`, shareable:
   - A large 3D field with isometric, broadcast and top-down cameras, reset, and a restrained orbit and zoom. With holographic fields and Full effects, the camera flies in over a decorative stadium.
   - Scoreboard and situation, with previous and next game buttons. The `[` and `]` keys and a swipe across the scoreboard also move between games.
-  - An odds and win probability panel: the win probability meter (at the inspected play while you step through a drive), the sportsbook's spread, moneyline and total with opening lines, Kalshi prices with a trend of the home team's price, and after a game how the result compared with the closing lines.
+  - An odds and win probability panel, **as of whatever play you are looking at**. The win probability is the provider's figure after that play, with the change it made. The exchange's price is the last one recorded at or before that play's wall-clock time, with the change since the play before it, and the trend beside it stops there too, so the whole block is one moment rather than two. Nothing is interpolated: a price recorded after the play is never used, because it was not known then, and a play the provider gave no wall-clock time for gets no price at all.
+  - The sportsbook rewinds too, from Gridiron's own record. The provider reports an opening line and a latest one with no times attached, so Gridiron writes down every line it is told and when it was told it, and shows the one that stood at the play with what it had been before: "As reported 5 min before this play". Where the record has nothing to say about that moment it says which kind of nothing it is, **"No line recorded at this play"** for a game it was watching and **"Opening and closing lines, not play by play"** for a game no record was kept for, rather than letting a closing line be read as the line at that moment.
   - A drive chart that draws every reported play of the current drive as an arrow across the field. Selecting a play inspects it.
   - Drive replay: play, pause, step, scrub, speed, scoring jumps, current drive and back to live.
+  - **The reel: every scoring play in order, drawn on the field.** Landing on a play is deliberately a burst that draws no movement, which is right for a jump and wrong here, where the jump is the thing being watched, so the reel draws each score with its flight, its trail, its mark on the ground and the stands answering it. It runs the whole game's scores from the first, holds each one for a beat that scales with the replay speed, and hands the game back to live when it reaches the end. Anything done by hand ends it, because the viewer has taken the game back off it. `R`, the button beside the scoring jumps, or the command palette.
   - Game flow: the score margin across the game clock, with lead changes, ties and largest leads, or win probability play by play with its biggest swings marked and Kalshi's price drawn beside it. Every point opens its play on the field.
   - Passing, rushing and receiving leaders with headshots, as the provider reports them. A replay shows them only once the game is final.
   - A catch-up summary.
@@ -70,6 +75,127 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 - **Install.** A web app manifest, icons and shortcuts let Gridiron be installed as an app. In production, a service worker keeps the app shell for quick starts; live data is never cached.
 - **Honest empty state.** When nothing is live: the next kickoffs, recent finals, and a clearly labeled replay demo. Gridiron never shows fictional live games.
 - **Failures with a way out.** An unknown address shows a not-found page, and a view that fails shows a recovery panel instead of a blank page.
+
+## The tape
+
+Every other view answers "what is happening now". A football Sunday is a dozen
+games running at once, and the thing a Sunday is actually about is how they sit
+against each other in time: which game has been worth watching, where the day's
+swings landed, and which games are arriving at their endgames together. A grid
+of cards cannot show any of that, because a grid has no time in it.
+
+So Gridiron keeps a recording. Every time the presented world changes, each
+game's reported score and win probability are written down with the moment they
+were true. Nothing is fetched for it and nothing is sent anywhere: it is the
+same basis as "While you were away", a note of what the provider reported, kept
+on this device.
+
+**Reading a lane.** The band is the home team's reported chance to win, drawn
+from the middle out rather than from the bottom up. Drawn from the bottom, a
+nine in ten chance and a certainty look the same; from the middle, the thickness
+*is* the margin. The centre line is an even chance, so a crossing is a game
+changing hands. Upright marks are score changes, and the faint ones behind them
+are quarters. Where the provider reported no win probability the ribbon stops
+rather than joining across the gap, because a line between two known points is a
+claim about the time between them.
+
+**Under the band runs the pressure.** A second track along the bottom of each
+lane shows where a team was inside the twenty, in that team's colour. It turns
+the lane from "who was winning" into "who was winning, and who was knocking":
+red zone stacked up before a score mark is a drive that finished, and a long bar
+with no mark after it is one that did not. The recorder already keeps it, so it
+is drawn in the same pass and costs nothing.
+
+**Reading the day.** Above the lanes, three measurements: the game whose
+reported chance has moved most, the largest single swing anywhere on the card
+and where it landed, and the game that has changed hands most often. Each names
+the measurement rather than a verdict. "Most movement" is not "best game", and
+calling it that would be putting a rating on somebody else's model.
+
+**Games finishing together** is called out when two or more live games are
+within one score in the last five minutes of regulation or beyond. It is the one
+state a Sunday turns on that no single card can report, because each card only
+speaks for itself.
+
+**Pointing at the tape** puts one line across every lane and reads all of them
+at that moment: the score each game was at, the clock it was on, where its
+chance stood. It is the question "what was happening at ten to four" answered
+for the whole card at once. The arrow keys do the same thing: the lanes take
+focus, left and right step through the afternoon, shift takes a coarser step,
+Home and End go to its ends and Escape hands the lanes back to the live game.
+
+**Clicking a moment opens it.** A point on a lane is a play on the field, so the
+band opens that game at the play that was live at the moment under the pointer,
+not at the game's latest state. The game page holds there while the live game
+moves on and offers Back to live, exactly as stepping through a drive does. The
+recording keeps the play each reading followed, so this is the same reported
+play rather than a guess from the clock. Where the provider reported no play for
+that moment, the lane opens the game plainly rather than inventing one. The
+day's biggest swing in the summary above the lanes opens its own play the same
+way, because a swing was one play and that is the play worth seeing.
+
+**Movement** is the sum of every change the provider's win probability made,
+added up over the day, in probability points. It is a measurement of what was
+reported, not a rating: a game with one enormous swing and a game with forty
+small ones can arrive at the same number. A game whose provider reported no win
+probability shows none rather than a zero.
+
+**Nothing in a lane moves.** A lane's drawing is a function of its own data and
+the width of its column, and of nothing else: the clock and the pointer are not
+part of it. They used to be, and it was the wrong shape, because a dot moving
+four pixels rebuilt every ribbon, quarter, score and red zone on the page sixty
+times a second. The live edge and the scrub dot are two absolutely placed
+elements moved by a transform, which the compositor does on its own. Scrubbing
+right across a stopped card rebuilds **nothing at all**, which `e2e/tape.spec.ts`
+asserts by tagging every node in every lane and counting what came back new.
+
+The rest is static: corner brackets, the trailing rule, the glow on a numeral
+and the gradient in a band are painted once when the element is rasterised. The
+only motion is a one shot entrance on transform and opacity, stepped by lane and
+capped at twelve steps so a Saturday of sixty games never leaves the last one
+waiting a second and a half to appear. It is off under Reduced and 2D effects
+and under the device's reduced-motion setting.
+
+The tape is drawn in DOM and SVG, so it works identically in Full, Reduced and
+2D effects modes and needs no WebGL at all. It survives a reload within the same
+tab. A replay records on the replay's own clock, so a Sunday played back at
+thirty times speed still draws the shape of a Sunday.
+
+`4` opens it, or Tape in the layout control, or "Open the tape" in the command
+palette. It lives at `/tape`.
+
+**The day's biggest swing is in the command palette**, from any screen, and
+opens the play it was. It names the measurement and the game rather than
+calling it the play of the day, and it is absent rather than empty when there is
+no recording yet, no win probability anywhere, or no reported play for it.
+
+### The pulse on a card
+
+The recording is not only worth a view of its own. The meter on a live card says
+who is ahead right now; it cannot say whether that was always true. "Ravens 17,
+Colts 14, Q3" is the same card whether it has been a three point game all
+afternoon or a rout that has just come back, and those are not the same game to
+decide to watch.
+
+So every card carries its own lane, at card size, under the odds: the same
+ribbon from the same recording, drawn across that game's own span rather than
+the day's. Thickness is margin, a crossing is the moment it turned, and a gap is
+a stretch the provider reported nothing for. It is the same drawing code as the
+tape, so a card and its lane can never disagree about what the day did, which
+`e2e/tape.spec.ts` asserts by reading the movement off a lane and then off that
+game's card.
+
+It draws nothing at all until there is something to draw: no empty box, no flat
+line at an even chance, no placeholder. A game the provider reported no win
+probability for simply has no pulse. It follows the odds preference, because it
+is a reading of win probability and turning odds off has to take every drawing
+of them. Colour comes from the two variables the card already sets for its own
+team light, so it costs no colour work and follows a theme change with the card.
+
+Like a lane, nothing in it moves: it takes a game id and nothing else, so the
+clock cannot reach it. At the recorder's cap of 900 readings, building the shape
+takes 0.7 ms and laying out sixty of them takes 1.6 ms, measured in the browser
+on a full replay.
 
 ## Run it
 
@@ -179,6 +305,8 @@ Gridiron's default provider is **ESPN's public site API**. The endpoints are und
 - Game summary: `…/summary?event=ID`. It carries sportsbook lines (`pickcenter`), win probability after each play (`winprobability`) and, before kickoff, the matchup predictor (`predictor`).
 - Team and season schedule, for team pages: `…/teams/ID` and `…/teams/ID/schedule?season=YYYY&seasontype=1|2|3`
 - College group metadata: `sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/{year}/types/{type}/groups`, with its children and group documents
+- Live sportsbook line, for a followed game: `sports.core.api.espn.com/v2/sports/football/leagues/{league}/events/ID/competitions/ID/odds`. Its `current` is the line the book is offering; the scoreboard and the summary carry only an opening and a closing one. Its sibling `…/odds/{provider}/history/0/movement` exists and has always returned an empty page, so there is no line history to read.
+- Venue roof and playing surface, once per venue: `sports.core.api.espn.com/v2/sports/football/leagues/{league}/venues/ID`, which reports `indoor` and `grass`. The weather at a venue is on the scoreboard event itself.
 
 Nothing guarantees their availability, latency, completeness or shape. Every response is validated. A failed or malformed response marks data as delayed or unavailable, with the reason. It is never replaced with other data.
 
@@ -251,7 +379,12 @@ Every figure comes from a source that reported it. Gridiron never calculates a c
 - **Win probability** is ESPN's model after each reported play: the home team's chance, and a tie where one is possible. Cards and the pop-out show it as a meter with the leader's chance and, for a few seconds, the swing the latest play made. The game page adds the value at the inspected play and a play-by-play chart in Game flow.
 - **Matchup predictor.** Before kickoff, cards and the game page show ESPN's pre-game matchup predictor, drawn with a hatched meter.
 - **Sportsbook lines** are the first-priority sportsbook ESPN reports (DraftKings, for every game captured in September 2026): spread, moneyline and total, each with its opening value. Before kickoff they are the current lines, during a game the latest lines reported, and after it the closing lines, with how the final score compared.
+  - **The live line comes from ESPN's core API, which is the only place it appears.** The scoreboard and the game summary report an opening line and a closing one, and while a game is running there is no closing line yet, so those two payloads have nothing to say during the ninety minutes the line moves most. The core API's odds document carries `open`, `current` and `close`, and `current` is the live one: on a finished game it equals the close and differs from the open, so it tracked the game and stopped. A followed game reads it every twelve seconds, alongside the summary rather than after it. It is never read for a whole scoreboard, because a college Saturday is sixty games and a line nobody is looking at does not need reading every twelve seconds.
 - **Kalshi prices.** Each team's contract to win, and the spread and total contracts nearest the sportsbook's lines. A price of 55% means the contract trades around 55 cents: the middle of the best bid and ask while they are at most 5 cents apart, otherwise the last trade. Prices that have not refreshed for 90 seconds are marked as possibly out of date.
+- **Line history.** Whenever the live line differs from the one Gridiron last wrote down, that is a new point stamped with when it was seen: both sides of the spread, the total and the moneyline, up to 240 points a game. It is a record of what was reported and when, never an estimate of what a book was offering at a moment nobody looked, and the game page rewinds it to the play being inspected by the same rule the exchange's price uses.
+  - **There is no historical source to fall back on.** The provider has no endpoint that says what a line was at a past moment: its own line-movement collection exists and is always empty, and its odds documents carry no timestamp of any kind. A book's line can only be known for a game something was watching at the time, which is what makes the recording the whole mechanism rather than a cache.
+  - **How the line moved is drawn beside it**, as a step line with a mark for every reading the book posted, because a book posts a line and it stands until the book posts another. It appears only where the record has movement in it: a game Gridiron was not watching gets no trend rather than a flat one. A figure lights for a moment when the book moves it.
+  - **A replay rewinds a recording made while that game ran.** `npx tsx scripts/capture-lines.ts --league nfl --live` records games in progress into `fixtures/lines/`, using the same rule the running server uses, and a replay of a game it watched shows the line that stood at the replay clock and rewinds it to any play. A scenario nothing was recording for has no line and says so; the captured replays that ship with Gridiron predate the recording, so they say so. Nothing is recorded inside a replay: a replay runs on the original game's clock, so a reading taken today would stand after every play in it and describe none.
 - **Price history.** Game flow's win probability view draws Kalshi's price for the home team to win as a dashed line beside ESPN's model. Each price sits between the plays around it by time, so a price that moved during a timeout sits between those plays, and the line stops at the latest play shown. The odds panel adds a sparkline of the same contract and how far it has moved: over the week before kickoff, or from an hour before kickoff once the game starts.
 - **Why these sources.** Both can be read with no account, key or sign-up, and DraftKings lines arrive through ESPN. Polymarket's public NFL series returned no game events when checked on 14 September 2026. Reading FanDuel, BetMGM, Stake or Robinhood directly would mean scraping their sites or paying for an odds service, so Gridiron does not.
 - **Formats.** American (−130), decimal (1.77) or chance (57%), chosen in Display settings or on the game page panel. Chance shows what odds imply, with the sportsbook's margin still in.
@@ -259,6 +392,17 @@ Every figure comes from a source that reported it. Gridiron never calculates a c
 - **Replays** include the captured closing lines, ESPN's win probability cut at the replay clock and, for the NFL Week 1 replay, Kalshi's prices captured minute by minute and cut the same way. Replays never read Kalshi live.
 
 Odds and prices are shown for information only, not as betting advice. 21+. Gambling problem? Call 1-800-GAMBLER.
+
+## The sky over the field
+
+Every field used to be lit the same way, which made a night game in the snow and a one o'clock game in the sun the same picture with different end zones. ESPN reports the weather at the venue and whether the venue has a roof, so the field says so. Nothing here is a forecast, a guess or a mood.
+
+- **The light is the reported condition.** The sun is scaled and tinted by it, the sky itself fills more of the shadows as the weather closes in (an overcast day is one big soft light), the far end of the field is lost in the air in fog, and a roof is its own even light from straight above with no weather at all.
+- **Night comes from the provider, not from a clock.** ESPN's condition ids carry their own sense of dark: 33 to 44 are the night forms of 1 to 14. That is the only honest signal, because a venue's local time zone is not reported and a kickoff time in UTC does not say. It works because the reported condition is the forecast at kickoff: a game starting at 8:15 in the evening is reported with a night form hours beforehand.
+- **Rain and snow fall on the game page**, where the provider reported rain, a thunderstorm, snow or ice, and nowhere else. One draw over the field, moved entirely in a vertex shader: each drop walks down its own column at its own speed and wraps back to the top, so a frame writes one uniform and nothing is rebuilt while it falls. Rain is a streak, snow drifts sideways as it comes down. Cards never run their own weather; thirteen of them would be thirteen of these, for drops a pixel across. A card's turf is still lit by its own game's sky, which costs one colour, so a Sunday of thirteen cards shows the snowy games and the sunny ones apart at a glance.
+- **A grass field is mown and a synthetic one is not.** Mowing stripes are made by a mower laying the blades one way and then the other, and an artificial surface has no blades to lay. ESPN reports which a venue has on the venue's own document, read once per venue and then remembered: a synthetic field is one flat weave with a seam every five yards where its rolls meet, and a grass field keeps its stripes.
+- **The field says what it is lit by**, in ESPN's own words and its own temperature, beside the schematic note. Where nothing was reported the field is lit exactly as it was before there was a sky, and nothing is appended.
+- **Where to see one.** No captured replay carries weather, because it lives on the live scoreboard and was not captured with those games. The `test-weather` replay scenario puts snow after dark on a grass field at a real game that was played in the dry, and says so in its label, its description and the replay bar.
 
 ## Reading the field: schematic conventions
 
@@ -272,12 +416,22 @@ Odds and prices are shown for information only, not as betting advice. 21+. Gamb
 - Blue marks the line of scrimmage and amber the line to gain. On goal to go, the goal line is highlighted instead; no marker is drawn in the end zone.
 - The red zone is tinted when the offense is inside the opponent 20. An arrow shows the attacking direction.
 - Movement between two reported spots uses a schematic shape from the reported play type:
-  - Runs sweep and passes arc. Punts, kickoffs and field goals fly high.
+  - Runs sweep and passes arc. Punts, kickoffs and field goals fly high, and so does an extra point, which the provider reports as a kick on the conversion rather than in the kind of play and which used to slide along the ground like a run.
+  - A kick the provider says was blocked never gets away: up off the foot, knocked back down, short and over quickly.
+  - **An interception is thrown one way and taken back the other.** It is in the air for the throw and carried for the return, so it spirals out and stops spiralling once it has changed hands. Where it changed hands is not reported, so the turn is drawn just past the further of the throw and the end of the return, which is the one thing that can be said about it: the catch was beyond both, because the ball was thrown forward and then carried back.
   - Incompletions go out and come back. Sacks drop back.
   Routes, formations, landing points and tackle locations are not reported and are never drawn.
+- **Each game is played on the home team's field.** The mark at the fifty is the home team's, painted into the turf: their logo where the provider gives one, and their letters in a ring where it does not. It is the same liberty the end zones already take, and it is the one thing that makes a real field that team's field; without it every game was played on the same field with different end zones. On painted turf it is ink at part strength and on the holographic field it is added as light, and it is drawn at a size to suit the field it is on, so a card keeps a quarter of the texture the game page uses.
+- **The ball is a football.** It is a circular arc revolved about its long axis, which is the shape a football actually is and is what gives it points at the ends; a scaled sphere has neither and read as a pill. It carries its lace panel, and a college ball carries the two white stripes NCAA rules require while a pro ball carries none, drawn from the same rulebook table as the hash marks. Like every other mark on a schematic field it is well over life size, so that it is still a football on a card.
+- **The ball carries itself the way the play says it was thrown.** A pass or a punt spirals about its long axis and its nose follows the arc it is on: up off the hand, level at the top, down into the catch. A ball struck off the ground or a tee, which the reported kind of play names, goes over the top end over end instead and does not spiral at all. A ball being carried is tucked under an arm and does not turn at all, so the ball tells a pass from a run from a kickoff before the description is read. The nose angle is measured from the ball's own last two positions, so it is right for every shape without any of them describing it, and the spin is the speed that reads *as* a spiral at the size the ball is drawn rather than the sixty turns a second a real one makes, which at sixty frames a second would stand still.
+- **The ball wears the mark of the team the provider says has it.** Possession is reported, so the field may say it: on the game page the ball carries that team's logo on the two upper flanks either side of the laces, where an elevated camera sees it, and at every size the arrow and the mark under the ball take that team's colour. They ease between colours, so a turnover reads as the field changing hands rather than only as a line of text. When possession is not reported the ball is plain leather and the marks are the field's own colour: it never guesses who has the ball. A logo that will not load cross-origin becomes the team's letters, drawn the same way.
+- **The mark under the ball behaves like a shadow**, spreading and softening as the ball climbs. On painted turf it is a shadow and falls away from the light; on the holographic field there is no sun, so it stays under the ball and is light rather than dark, where it is also the only thing marking the ball over a dark surface.
+- **The drive is on the field, not only in a chart beside it.** The ground between where the drive began and where the ball is now is shaded in the offense's colour, as a ramp that is faint at the start and strongest at the ball; the play it began at is a dashed line, so it can never be mistaken for the line of scrimmage or the line to gain; and one mark along the near sideline stands for each play the provider gave an end spot for, oldest dimmest, so the spacing of them is the rhythm of the drive. A play the provider gave no spot for has no mark, and the panel beside the field says how many those were. Stepping through the drive replay grows it play by play, because the field and the panel are built from one reading of the drive and that reading is cut at the play being watched.
+- **A play draws its own path as it runs.** The arc or the ground ribbon is revealed under the ball rather than appearing once the ball has landed, and it stays until the next play. It brightens toward the ball whichever way the play ran. When the ball arrives, one quick ring marks the spot it stopped, widened by the ground the play covered, so a long gain lands harder than a two yard run.
+- **The broadcast camera moves with the play.** It pans along the field while the ball runs, keeping its own height, angle and distance and lagging a little, which is what a camera on a sideline does; it used to wait for the play to stop and then move to where it ended. A preset, a reset or a zoom takes over from it, and once the viewer has turned the camera themselves it never moves on its own again. The isometric and top-down cameras frame the whole field and never chase a play.
 - Drive strips and charts draw only reported spots. A play without one keeps its row and says "Spot not reported".
 - The field label names the play and its reported yardage, such as "Rush +7" or "Sack −8". "First down" is added only when the reported downs show a new set of downs, and the line to gain then sweeps out once.
-- Emphasis follows the reported event: touchdown (the end zone lights in the scoring team's color), field goal, safety, turnover, penalty flag and review. In the holographic style, sheets of light rise at the line of scrimmage and the line to gain, a beam tracks the ball, and a touchdown raises a column of light and sparks in the scoring team's color. Timing bands:
+- Emphasis follows the reported event: touchdown (the end zone lights in the scoring team's color), field goal, safety, turnover, penalty flag and review. A kick the provider called good lights the gate between the uprights, which is the one moment the goal posts are the subject and the one thing that told a kick that counted from one that did not. In the holographic style, sheets of light rise at the line of scrimmage and the line to gain, a beam tracks the ball, and a touchdown raises a column of light and sparks in the scoring team's color. On the game page **the arena answers a reported score**: the crowd takes the scoring team's colour for a few seconds while camera flashes pop through the stands, each seat at its own moment. It is decoration keyed to a reported score, and it says nothing about the real venue or the real crowd. Timing bands:
   - 150 to 250 ms for settles
   - 300 to 500 ms for short moves
   - 500 to 1000 ms for flights and scores
@@ -318,6 +472,7 @@ The five test scenarios are built on real games but contain deliberate edits, an
 - The NFL Week 1 replay carries Kalshi's prices for its 13 games, captured minute by minute (`fixtures/kalshi`) and cut at the replay clock: each team's contract as of the latest captured minute, and the price history up to the clock. Like live prices, they end with the game. Synthetic scenarios never carry them.
 - A watch party guest joins the host's replay session, so everyone sees the same clock.
 - Captured data is refreshed with `npm run fixtures`, which needs network access. `npx tsx scripts/augment-fixtures.ts` then adds leaders, attendance, sportsbook lines and win probability to the captured summaries, and `npx tsx scripts/capture-kalshi.ts` captures Kalshi prices for a real replay.
+- `npx tsx scripts/capture-lines.ts --league nfl --live` records a sportsbook's line while games are actually running, so a replay of those games can rewind it. Unlike the exchange's prices, this one cannot be captured afterwards: there is no endpoint that says what a line was at a past moment, so it has to be watched at the time. It writes to `fixtures/lines/` after every round, so stopping it keeps what it has, and it refuses a game that is already final.
 
 ## Alerts
 
@@ -344,6 +499,7 @@ Settings:
 - Thresholds: big-play yards, close margin and the late window.
 - Delivery: quiet mode, per-game mute, and snooze.
 - **Sound is off by default** and is enabled only by your click, which plays a test chime.
+- **Field sounds** are separate, also off by default, and switched on in Display settings, which plays a test sound. On a game page and nowhere else, each play the field draws gets a short tone of its own: a touchdown, a field goal, a turnover, a first down, a sack, a long gain, a punt and a kickoff. What a play sounds like is decided from the reported play alone; a play the provider later corrected, settled or sent to review makes no sound, because it was never a moment. They follow the same animation the field draws, so they keep the spoiler delay and sound a play you step onto or watch in the reel exactly as they sound live, and they are rate limited to one every 220ms under a shared ceiling.
 - **Browser notifications** ask for permission only when you turn them on.
 - Screen reader announcements are polite, one at a time, for the kinds you choose.
 
@@ -372,7 +528,9 @@ Watch parties need the persistent server.
 ## Graphics and performance
 
 - **One WebGL canvas** draws every field. React Three Fiber and drei `View` scissor each field into its card's rectangle.
-- **Demand rendering.** Frames render only for data changes, scrolling, layout shifts and running animations. The game page's stadium is static, so it adds no frames.
+- **Demand rendering.** Frames render only for data changes, scrolling, layout shifts and running animations. The game page's arena is static apart from the few seconds it answers a score, so at rest it adds no frames at all.
+- **The arena is geometry, not a model.** The bowl is four tiers of merged steps shaded per vertex by height and by which way each face points, so one draw call carries the whole gradient and the rows still read from above. The crowd is one point cloud, and its celebration is patched into three.js's own points shader rather than replacing it, so the flashes cost one draw call and three uniforms. The four towers each throw a soft pool of light on the turf, so the field is lit rather than lighting itself, and the whole bowl darkens with distance from the camera, which is haze: two instructions and one varying, rather than scene fog, which would have meant turning fog off on every material the field shares with thirteen cards. The arena is eight draws in total, and it is only ever built for the game page in the holographic style with Full effects. Measured figures for the whole page are in [docs/VERIFICATION.md](docs/VERIFICATION.md).
+- **Diagnostics.** `window.__gridironGraphics` reports the renderer's counters and can drop the WebGL context; on a game page `window.__gridironField` reports what the field is doing, each layer writing its own part of it as it draws. Both are getters, so neither costs a frame anything, and `e2e/field.spec.ts` reads the second to check the things about the field that cannot be checked by looking at a still: how the ball turns, how much of a play's path has been drawn, which drive is on the field, what the stands are answering, and what the camera is doing.
 - **Shared resources.** Geometry and materials are shared, and goal posts and pylons are merged into single draw calls. The turf texture is drawn once per league. End-zone textures are reference-counted per team.
 - **Offscreen suspension.** A field's 3D scene unmounts when its card is far from the viewport.
 - **Adaptive resolution** depends on the effects setting, the number of fields and measured frame cost.
@@ -380,7 +538,7 @@ Watch parties need the persistent server.
 - **Performance modes:**
   - Full: 3D with animation.
   - Reduced: 3D with fades, at lower resolution.
-  - 2D: SVG fields drawn from the same markings, and no WebGL at all.
+  - 2D: SVG fields drawn from the same markings, and no WebGL at all. They are lit by the same reported sky through the same arithmetic, drop their mowing stripes on a surface that cannot be mown, and carry the same readings, including the attacking arrow in the colour of the team the provider says has the ball and the current drive, shaded from where it began to where the ball is, with a dashed line at the play it started from and one tick along the sideline for each play the provider gave an end spot for. It is the same `driveTrack` reading the 3D field and the drive chart take, so the three cannot disagree.
   The device's reduced-motion setting is always respected.
 - **Context loss** switches every field to 2D with a notice, retries automatically, and offers Retry 3D.
 - **Code splitting.**
@@ -429,8 +587,8 @@ Privacy:
 ```
 shared/      normalized model, field geometry and markings, formatting, alerts, Watch next,
              Director, While you were away, game flow, drive tracks, odds arithmetic, win
-             probability, market price history, team pages, push payloads, QR codes, delay
-             buffer, replay frames, play animation planning, boards, version
+             probability, market price history, the tape, team pages, push payloads, QR codes,
+             delay buffer, replay frames, play animation planning, boards, version
 server/      engine (polling, pushed updates, market prices, interest, deltas), fetcher, HTTP and
              SSE, config, rate limits, providers/espn (normalization, lines and win probability,
              coverage discovery, team documents), providers/sportradar, markets/ (Kalshi), team

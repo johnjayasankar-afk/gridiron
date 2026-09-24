@@ -36,10 +36,40 @@ test.describe('accessibility audit', () => {
     await audit(page, 'slate, Day theme');
   });
 
+  test('the tape', async ({ page }) => {
+    await openReplay(page, { at: 0.3, paused: false, speed: 60 });
+    await expect(liveCards(page).first()).toBeVisible();
+    await page.keyboard.press('4');
+    await expect.poll(() => page.locator('.tape-lane').count(), { timeout: 30_000 }).toBeGreaterThan(1);
+    await audit(page, 'the tape');
+  });
+
+  test('the tape in the Day theme', async ({ page }) => {
+    await seedPrefs(page, { theme: 'light' });
+    await openReplay(page, { at: 0.3, paused: false, speed: 60 });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.keyboard.press('4');
+    await expect.poll(() => page.locator('.tape-lane').count(), { timeout: 30_000 }).toBeGreaterThan(1);
+    await audit(page, 'the tape, Day theme');
+  });
+
   test('a game page', async ({ page }) => {
     await openReplay(page, { path: '/game/nfl-401872926', at: 0.55 });
     await expect(page.locator('.dchart')).toBeVisible();
     await audit(page, 'game page');
+  });
+
+  /*
+   * A game page under a sky: the situation panel gains a sentence about what the
+   * field is lit by, and the field itself gains a layer of falling snow. Both are
+   * new text and new drawing on a page that is already audited, so they are
+   * audited too rather than assumed to be inert.
+   */
+  test('a game page under weather', async ({ page }) => {
+    await openReplay(page, { path: '/game/nfl-401872925', scenario: 'test-weather', at: 0.4 });
+    await expect(page.locator('.dchart')).toBeVisible();
+    await expect(page.locator('.sit-note')).toContainText('Reported at the venue');
+    await audit(page, 'game page under weather');
   });
 
   test('a team page', async ({ page }) => {

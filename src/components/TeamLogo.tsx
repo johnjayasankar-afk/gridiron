@@ -4,8 +4,13 @@ import { useIsDark } from '../lib/theme';
 
 /**
  * A provider logo at a fixed square size so layout never shifts. Dark mode uses
- * the provider's dark variant when it supplies one, and otherwise sits the logo
- * on a light chip. A failed or missing logo becomes a designed abbreviation tile.
+ * the provider's dark variant when it supplies one. A failed or missing logo
+ * becomes a designed abbreviation tile.
+ *
+ * A logo is never sat on a light disc. The provider hands out the same team with
+ * and without its dark variant depending on which report it came from, so the
+ * disc used to appear and disappear every few seconds as reports arrived; the
+ * summaries keep a team's branding now, and a mark on the card is just the mark.
  */
 export function TeamLogo({ team, size = 28, className = '' }: { team: Team; size?: number; className?: string }) {
   const dark = useIsDark();
@@ -22,7 +27,7 @@ export function TeamLogo({ team, size = 28, className = '' }: { team: Team; size
     );
   }
   return (
-    <span className={`logo-frame ${dark && !team.logoDark ? 'on-chip' : ''} ${className}`} style={style} aria-hidden="true">
+    <span className={`logo-frame ${className}`} style={style} aria-hidden="true">
       <img src={src} width={size} height={size} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailed(src)} />
     </span>
   );

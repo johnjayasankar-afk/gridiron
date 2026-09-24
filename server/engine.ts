@@ -25,6 +25,7 @@ import type {
   GameId,
   GameSummary,
   LeagueId,
+  LineHistory,
   MarketHistory,
   MarketPrices,
   SlateSnapshot,
@@ -32,6 +33,7 @@ import type {
 import { EMPTY_FRESHNESS, isLiveOrPaused, isOver } from '../shared/model.js';
 import { computeDetailDelta, type DetailDelta } from '../shared/detailDelta.js';
 import { sameHistory } from '../shared/marketHistory.js';
+import { recordLine, sameLineHistory } from '../shared/lineHistory.js';
 import { mergeSummaries, withDerivedSituation } from '../shared/situation.js';
 import { easternDateKey, fingerprint, jitter, shiftDateKey } from '../shared/util.js';
 import type { ProviderPushEvent, SportsProvider } from './providers/types.js';
@@ -202,6 +204,15 @@ export class GridironEngine {
   private marketsAttached: boolean;
   private readonly historyReader: ((game: GameSummary) => Promise<MarketHistory | null>) | null;
   private readonly histories = new Map<GameId, { history: MarketHistory | null; at: number; inflight: Promise<void> | null }>();
+  /*
+   * Gridiron's own record of a sportsbook's line. The provider reports an
+   * opening and a latest line with no times attached, which is two numbers and
+   * not a history, so a game page could say what a prediction market traded at
+   * during any play and could not say the same about the book. Every reading
+   * that differs from the last one written down becomes a point, stamped with
+   * when it was seen; nothing is ever written for a moment nobody looked at.
+   */
+  private readonly lines = new Map<GameId, LineHistory>();
   private seq = 0;
   private running = false;
 
@@ -552,6 +563,7 @@ export class GridironEngine {
       const prev = slate.games.get(stamped.id);
       const merged = this.withMarket(prev ? mergeSummaries(prev, stamped) : stamped);
       slate.games.set(stamped.id, merged);
+      this.recordLines(stamped.id, merged, result.receivedAt);
       const print = summaryPrint(merged);
       if (slate.prints.get(stamped.id) !== print) {
         slate.prints.set(stamped.id, print);
@@ -627,7 +639,15 @@ export class GridironEngine {
       summary: { ...detail.summary, receivedAt, source: 'summary', divisions: summary?.divisions ?? detail.summary.divisions },
     });
     // With an exchange attached, the held price history rides along; the replay lab's provider supplies its own.
-    const stamped: GameDetail = this.historyReader ? { ...derived, marketHistory: this.histories.get(id)?.history ?? null } : derived;
+    const withMarket: GameDetail = this.historyReader ? { ...derived, marketHistory: this.histories.get(id)?.history ?? null } : derived;
+    /*
+     * The line this detail carries is written down before the detail is stamped,
+     * so a reading and the detail that brought it reach clients as one version
+     * rather than as a detail followed by an amendment to it.
+     */
+    this.recordLines(id, derived.summary, receivedAt, false);
+    // The replay lab supplies its own recording, cut at the replay clock, the same way it supplies its own price history.
+    const stamped: GameDetail = this.mode === 'replay' ? withMarket : { ...withMarket, lineHistory: this.lines.get(id) ?? null };
     const print = fingerprint(JSON.stringify({ ...stamped, summary: { ...stamped.summary, receivedAt: 0 } }));
     const changed = print !== entry.print;
     entry.freshness = {
@@ -698,6 +718,40 @@ export class GridironEngine {
         slot.inflight = null;
       });
     return slot.inflight;
+  }
+
+  /** Writes down a sportsbook's line when it differs from the last reading taken. */
+  private recordLines(id: GameId, summary: GameSummary, receivedAt: number, attach = true) {
+    /*
+     * Not in the replay lab. A replay runs on the original game's clock, so its
+     * plays are stamped with a Sunday months ago while a reading taken now would
+     * be stamped with today. Writing that down would put a reading in the record
+     * that stands after every play in the game and describes none of them, and
+     * would turn "the provider reports no line during a game" into the false
+     * "nothing was recorded at this play". A replay has no line from then
+     * because nobody was watching then, and the page says exactly that.
+     */
+    if (this.mode === 'replay') return;
+    const held = this.lines.get(id) ?? null;
+    const next = recordLine(held, summary.lines, iso(receivedAt));
+    if (next === held || !next) return;
+    this.lines.set(id, next);
+    if (attach) this.attachLines(id);
+  }
+
+  /** Puts the recorded line on a game's detail when it differs, as a new detail version. */
+  private attachLines(id: GameId) {
+    const entry = this.details.get(id);
+    if (!entry?.detail) return;
+    const history = this.lines.get(id) ?? null;
+    if (sameLineHistory(entry.detail.lineHistory, history)) return;
+    const next: GameDetail = { ...entry.detail, lineHistory: history };
+    entry.previous = entry.detail;
+    entry.detail = next;
+    entry.print = fingerprint(JSON.stringify({ ...next, summary: { ...next.summary, receivedAt: 0 } }));
+    entry.version++;
+    entry.delta = computeDetailDelta(entry.previous, next, entry.version - 1, entry.version);
+    this.emitDetail(id, entry);
   }
 
   /** Puts the held price history on a game's detail when it differs, as a new detail version. */

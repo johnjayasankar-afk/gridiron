@@ -5,12 +5,14 @@ import { createPortal } from 'react-dom';
 import { statusShort } from '../../shared/format';
 import type { Team } from '../../shared/model';
 import { isLiveOrPaused } from '../../shared/model';
-import { isTeamPageId, navigate } from '../app/router';
+import { dayHighlights } from '../../shared/tape';
+import { getLocation, isTeamPageId, navigate } from '../app/router';
 import { copyText } from '../lib/share';
 import { useResolvedTheme } from '../lib/theme';
-import { usePresentedWorld } from '../state/live';
+import { usePresentedWorld, type World } from '../state/live';
 import { DEFAULT_FILTERS, usePrefs } from '../state/prefs';
 import { searchText, slateGames } from '../state/selectors';
+import { tapeTracks, useTape } from '../state/tape';
 import { useUi } from '../state/ui';
 
 interface Item {
@@ -30,6 +32,34 @@ interface Command {
   run: () => void;
 }
 
+/**
+ * The day's largest reported swing, as somewhere to go.
+ *
+ * The tape already names it, but only on the tape. A swing was one play, the
+ * recording kept which play each reading followed, and the game page already
+ * opens at a play, so the whole of "show me the play of the day" is here for
+ * the cost of reading the recording. It names the measurement and the game
+ * rather than calling it the play of the day, which would be a verdict on
+ * somebody else's model.
+ *
+ * It is absent, not empty, when nothing has been reported: no recording yet, no
+ * win probability anywhere, or a swing whose play the provider did not give.
+ */
+function biggestSwingCommand(world: World | null): Command | null {
+  const swing = dayHighlights(tapeTracks(useTape.getState())).biggestSwing;
+  if (!swing || !swing.sample.play) return null;
+  const game = world?.games[swing.gameId];
+  if (!game) return null;
+  const at = new Date(swing.sample.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return {
+    id: 'swing',
+    label: `Open the day's biggest swing: ${game.away.shortName} at ${game.home.shortName}`,
+    keywords: 'tape win probability movement moment play biggest swing turning point',
+    hint: `${Math.round(Math.abs(swing.swing) * 100)} points · ${at}`,
+    run: () => navigate({ name: 'game', id: swing.gameId }, { params: { play: swing.sample.play! } }),
+  };
+}
+
 function commands(theme: 'light' | 'dark', query: string): Command[] {
   const p = usePrefs.getState();
   const ui = useUi.getState();
@@ -37,6 +67,7 @@ function commands(theme: 'light' | 'dark', query: string): Command[] {
     { id: 'slate', label: 'Go to the slate', keywords: 'view grid cards home', hint: '1', run: () => navigate({ name: 'slate' }) },
     { id: 'focus', label: 'Go to Focus', keywords: 'view large', hint: '2', run: () => navigate({ name: 'focus' }) },
     { id: 'wall', label: 'Open the wall', keywords: 'fullscreen tv second screen', hint: '3', run: () => navigate({ name: 'wall' }) },
+    { id: 'tape', label: 'Open the tape', keywords: 'timeline day history win probability movement best game', hint: '4', run: () => navigate({ name: 'tape' }) },
     { id: 'live', label: 'Show the live day', keywords: 'today now', hint: 'L', run: () => p.set({ dayMode: 'live', date: null }) },
     { id: 'today', label: 'Show today', keywords: 'date day', run: () => p.set({ dayMode: 'today', date: null }) },
     { id: 'nfl', label: 'Show NFL games only', keywords: 'league pro', run: () => p.set({ league: 'nfl' }) },
@@ -84,6 +115,20 @@ function commands(theme: 'light' | 'dark', query: string): Command[] {
       run: () => void copyText(window.location.href).then((ok) => ui.showNotice(ok ? 'Link copied' : 'Could not copy the link')),
     },
   ];
+
+  // The reel belongs to a game page, so it is only offered from one.
+  const at = getLocation().route;
+  const watching = ui.inspection;
+  if (at.name === 'game' && watching && watching.gameId === at.id) {
+    list.push({
+      id: 'reel',
+      label: watching.reel ? 'Stop the reel' : 'Play the scores',
+      keywords: 'reel recap highlights scores touchdowns watch every scoring play',
+      hint: 'R',
+      run: () => ui.patchInspection({ reel: !watching.reel, playing: false }),
+    });
+  }
+
   if (query.trim()) {
     list.unshift({
       id: 'filter-query',
@@ -164,7 +209,8 @@ function Palette() {
             return { id: `team:${t.key}`, group: 'Teams', label: `${t.displayName} (${t.abbreviation})`, hint: isFavorite ? 'Favorite · Enter removes' : 'Enter adds to favorites', run: toggle };
           })
       : [];
-    const commandItems: Item[] = commands(theme, query)
+    const commandItems: Item[] = [biggestSwingCommand(world), ...commands(theme, query)]
+      .filter((c): c is Command => c !== null)
       .filter((c) => !tokens.length || c.id === 'filter-query' || match(`${c.label} ${c.keywords}`.toLowerCase()))
       .slice(0, tokens.length ? 8 : 12)
       .map((c) => ({ id: `cmd:${c.id}`, group: 'Commands', label: c.label, hint: c.hint, run: c.run }));

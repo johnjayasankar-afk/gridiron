@@ -96,6 +96,7 @@ export function ReplayBar() {
   useEffect(() => {
     if (!sessionId) {
       setStatus(null);
+      useLive.getState().setReplayClock(null);
       return;
     }
     let cancelled = false;
@@ -104,6 +105,9 @@ export function ReplayBar() {
         const s = await replayApi.status(sessionId);
         if (!cancelled) {
           setStatus(s);
+          // The tape stamps its samples with the replay's clock rather than the
+          // wall clock, and this is the only thing that reads it.
+          useLive.getState().setReplayClock({ virtual: Date.parse(s.virtualTime), readAt: Date.now(), speed: s.playing ? s.speed : 0 });
           setError(null);
           setExpired(false);
         }
@@ -119,6 +123,7 @@ export function ReplayBar() {
     return () => {
       cancelled = true;
       clearInterval(t);
+      useLive.getState().setReplayClock(null);
     };
   }, [sessionId]);
 

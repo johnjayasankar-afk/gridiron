@@ -1,0 +1,185 @@
+/* labs-glass · the material, the arrival, and the four modes
+   ----------------------------------------------------------------------------
+   Everything the Labs family shares that is not a colour: the glass, the way
+   blocks and headings arrive, and what happens when a reader asks for less
+   motion, less transparency, more contrast, or hands the colours to the system.
+
+   It sets no app tokens, so it is safe over an app that already has its own.
+   Pair it with labs-tokens.css only when the app has none.
+
+   Load order: labs-tokens.css (if used), then the app's stylesheet, then this
+   file. Last is deliberate, so a surface that opts into .gl takes the material
+   rather than the background it had before.
+
+   An app that follows the system's colour scheme adds data-labs-glass="auto" to
+   <html>; the glass then takes its dark recipe in the dark scheme.
+*/
+
+
+/* ---- small shared habits ---------------------------------------------------------- */
+/* a <picture> is only a wrapper: the <img> stays the element the layout sees */
+picture { display: contents; }
+/* every figure on a page sits on the same numeral width */
+.tnum, [data-tnum] { font-variant-numeric: tabular-nums; }
+
+/* ---- liquid glass ----------------------------------------------------------------- */
+/* One material, four tints. Chromium bends the page through an SVG lens at the rim
+   (.gl-on, set by labs-ui.js); every other browser keeps frosted glass. Both get the
+   same rim of light, and a highlight that follows the pointer.
+   No position and no transition here: these surfaces are positioned and animated by
+   their own rules, and setting either from the material breaks them. */
+.gl {
+  background-color: rgba(var(--gl-rgb, 255, 255, 255), var(--gl-tint, .55));
+  -webkit-backdrop-filter: var(--gl-fx, var(--gl-blur, blur(16px) saturate(1.8)));
+  backdrop-filter: var(--gl-fx, var(--gl-blur, blur(16px) saturate(1.8)));
+  box-shadow: inset 1.8px 1.8px 0 -.7px rgba(255, 255, 255, 1), inset -1.4px -1.8px 0 -.7px rgba(255, 255, 255, .62),
+              inset 0 0 0 1px rgba(255, 255, 255, .42), inset 0 0 26px rgba(255, 255, 255, .14),
+              0 0 0 .5px rgba(28, 51, 38, .07), var(--gl-drop, 0 14px 34px -16px rgba(15, 42, 29, .42));
+}
+/* flat glass: the tint and the rim without asking the compositor for a backdrop.
+   It is what the small, numerous, moving pieces wear. */
+.gl--flat {
+  background-color: rgba(var(--gl-rgb, 255, 255, 255), var(--gl-tint, .68));
+  box-shadow: inset 1.6px 1.6px 0 -.7px rgba(255, 255, 255, 1), inset -1.2px -1.4px 0 -.6px rgba(255, 255, 255, .6),
+              inset 0 0 0 1px rgba(28, 51, 38, .1), inset 0 0 18px rgba(255, 255, 255, .16),
+              var(--gl-drop, 0 6px 16px -10px rgba(28, 51, 38, .3));
+}
+.gl--dark {
+  background-color: rgba(11, 26, 19, var(--gl-tint, .44));
+  box-shadow: inset 1.8px 1.8px 0 -.7px rgba(255, 255, 255, .5), inset -1.4px -1.8px 0 -.7px rgba(255, 255, 255, .18),
+              inset 0 0 0 1px rgba(167, 243, 208, .22), inset 0 0 26px rgba(167, 243, 208, .07),
+              var(--gl-drop, 0 18px 40px -18px rgba(0, 0, 0, .55));
+}
+.gl--mint {
+  background-color: rgba(163, 240, 203, var(--gl-tint, .62));
+  box-shadow: inset 1.6px 1.6px 0 -.6px rgba(255, 255, 255, .9), inset -1.2px -1.6px 0 -.6px rgba(255, 255, 255, .4),
+              inset 0 0 0 1px rgba(31, 107, 74, .16), inset 0 0 22px rgba(255, 255, 255, .16),
+              var(--gl-drop, 0 14px 34px -18px rgba(28, 51, 38, .35));
+}
+.gl--clear { --gl-tint: .3; --gl-blur: blur(5px) saturate(1.7); }
+/* the light the glass carries: one sheen across the face, one that follows the pointer */
+.gl--spec { background-image: radial-gradient(240px circle at var(--gx, 50%) var(--gy, -10%), rgba(255, 255, 255, .5), transparent 62%), linear-gradient(118deg, rgba(255, 255, 255, .3) 0 15%, rgba(255, 255, 255, .06) 34%, rgba(255, 255, 255, 0) 54%); }
+.gl--dark.gl--spec { background-image: radial-gradient(260px circle at var(--gx, 50%) var(--gy, -10%), rgba(167, 243, 208, .22), transparent 62%), linear-gradient(118deg, rgba(255, 255, 255, .12) 0 15%, rgba(255, 255, 255, .02) 36%, rgba(255, 255, 255, 0) 54%); }
+/* the lens takes over from the plain blur; set last so it wins over the tints above */
+.gl-on { --gl-fx: var(--lg); }
+/* a glass control presses in: the bevel flattens, the tint drops */
+.gl:active, .gl--flat:active { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3), inset 0 2px 6px rgba(15, 42, 29, .16); }
+button.gl:active, a.gl:active, button.gl--flat:active, a.gl--flat:active { transform: translateY(.5px) scale(.985); }
+
+/* ---- arrival ---------------------------------------------------------------------- */
+/* Blocks rise into place the first time they arrive. labs-ui.js adds .labs-reveal to
+   the root, so nothing moves when the script never runs. */
+/* the attribute is labs-ui's own: an app that already uses [data-reveal] keeps it */
+.labs-reveal [data-labs-reveal]:not(.is-done) {
+  transition: opacity .62s var(--ease, cubic-bezier(.32, .72, 0, 1)), transform .72s var(--ease, cubic-bezier(.32, .72, 0, 1)), filter .62s var(--ease, cubic-bezier(.32, .72, 0, 1));
+  transition-delay: calc(var(--rd, 0) * 70ms);
+}
+.labs-reveal [data-labs-reveal]:not(.is-in) { opacity: 0; transform: translateY(16px); filter: blur(3px); }
+
+/* a heading arrives one word after another: craft, rather than motion for its own sake */
+.wd { display: inline-block; }
+.labs-reveal .wds .wd { transition: opacity .5s var(--ease, cubic-bezier(.32, .72, 0, 1)), transform .7s var(--ease, cubic-bezier(.32, .72, 0, 1)); transition-delay: calc(var(--wd, 0) * 30ms); }
+.labs-reveal [data-labs-reveal]:not(.is-in) .wds .wd,
+.labs-reveal .wds--io:not(.is-in) .wd { opacity: .06; transform: translateY(.34em); }
+/* a heading already on screen plays on load, and starts visible so it still counts as
+   the page's main content */
+.wds--load .wd { animation: labs-wdrise .7s var(--ease, cubic-bezier(.32, .72, 0, 1)) both; animation-delay: calc(var(--wd, 0) * 24ms); }
+@keyframes labs-wdrise { from { opacity: .12; transform: translateY(.34em); } }
+
+/* ---- less motion, less transparency ----------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .gl, .gl--flat { background-color: rgba(255, 255, 255, .97) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background-image: none !important; }
+  .gl--dark { background-color: rgba(14, 30, 22, .97) !important; }
+  .gl--mint { background-color: rgba(163, 240, 203, .97) !important; }
+}
+
+/* ---- more contrast ---------------------------------------------------------------- */
+/* Someone who asks the system for more contrast gets darker ink, firmer lines,
+   and glass that sits closer to solid. */
+@media (prefers-contrast: more) {
+  .gl { --gl-tint: .88; --gl-tint-dark: .9; }
+  .gl--flat { --gl-tint: .94; --gl-tint-dark: .94; }
+  .gl--dark { --gl-tint: .88; }
+}
+
+/* ---- forced colours --------------------------------------------------------------- */
+/* When the system replaces every colour, a rim drawn with box-shadow vanishes and
+   surfaces run together. Give them a real border, and make glass opaque: it has
+   nothing left to be translucent against. */
+@media (forced-colors: active) {
+  .gl, .gl--flat, .gl--dark, .gl--mint, .gl--spec {
+    backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+    background-color: Canvas !important; background-image: none !important;
+    border: 1px solid CanvasText;
+  }
+  :focus-visible { outline: 2px solid Highlight !important; outline-offset: 2px; }
+  svg, canvas, .labs-keep-colour { forced-color-adjust: none; }
+}
+
+
+/* ---- the dark recipe ------------------------------------------------------------- */
+/* White glass on a dark page reads as fog. Two ways in, so an app can use whichever
+   it already has:
+     <html data-labs-glass="auto">   follow the system's colour scheme
+     <html data-theme="dark">        an app that switches themes itself
+*/
+[data-theme="dark"] .gl:not(.gl--mint) {
+  background-color: rgba(11, 26, 19, var(--gl-tint-dark, .5));
+  box-shadow: inset 1.8px 1.8px 0 -.7px rgba(255, 255, 255, .5), inset -1.4px -1.8px 0 -.7px rgba(255, 255, 255, .18),
+              inset 0 0 0 1px rgba(167, 243, 208, .22), inset 0 0 26px rgba(167, 243, 208, .07),
+              var(--gl-drop, 0 18px 40px -18px rgba(0, 0, 0, .55));
+}
+[data-theme="dark"] .gl--flat:not(.gl--mint) {
+  background-color: rgba(11, 26, 19, var(--gl-tint-dark, .62));
+  box-shadow: inset 1.4px 1.4px 0 -.6px rgba(255, 255, 255, .28), inset -1px -1.2px 0 -.5px rgba(255, 255, 255, .1),
+              inset 0 0 0 1px rgba(167, 243, 208, .16), var(--gl-drop, 0 6px 16px -10px rgba(0, 0, 0, .5));
+}
+[data-theme="dark"] .gl--spec {
+  background-image: radial-gradient(260px circle at var(--gx, 50%) var(--gy, -10%), rgba(167, 243, 208, .22), transparent 62%),
+                    linear-gradient(118deg, rgba(255, 255, 255, .12) 0 15%, rgba(255, 255, 255, .02) 36%, rgba(255, 255, 255, 0) 54%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  [data-theme="dark"] .gl, [data-theme="dark"] .gl--flat { background-color: rgba(12, 26, 19, .97) !important; }
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-labs-glass="auto"] .gl:not(.gl--mint) {
+    background-color: rgba(11, 26, 19, var(--gl-tint-dark, .5));
+    box-shadow: inset 1.8px 1.8px 0 -.7px rgba(255, 255, 255, .5), inset -1.4px -1.8px 0 -.7px rgba(255, 255, 255, .18),
+                inset 0 0 0 1px rgba(167, 243, 208, .22), inset 0 0 26px rgba(167, 243, 208, .07),
+                var(--gl-drop, 0 18px 40px -18px rgba(0, 0, 0, .55));
+  }
+  [data-labs-glass="auto"] .gl--flat:not(.gl--mint) {
+    background-color: rgba(11, 26, 19, var(--gl-tint-dark, .62));
+    box-shadow: inset 1.4px 1.4px 0 -.6px rgba(255, 255, 255, .28), inset -1px -1.2px 0 -.5px rgba(255, 255, 255, .1),
+                inset 0 0 0 1px rgba(167, 243, 208, .16), var(--gl-drop, 0 6px 16px -10px rgba(0, 0, 0, .5));
+  }
+  [data-labs-glass="auto"] .gl--spec {
+    background-image: radial-gradient(260px circle at var(--gx, 50%) var(--gy, -10%), rgba(167, 243, 208, .22), transparent 62%),
+                      linear-gradient(118deg, rgba(255, 255, 255, .12) 0 15%, rgba(255, 255, 255, .02) 36%, rgba(255, 255, 255, 0) 54%);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    [data-labs-glass="auto"] .gl, [data-labs-glass="auto"] .gl--flat { background-color: rgba(12, 26, 19, .97) !important; }
+  }
+}
+
+/* ---- print ------------------------------------------------------------------------ */
+/* On paper this is a document: ink on white, no menus, and every outside link saying
+   where it goes. */
+@media print {
+  @page { margin: 16mm; }
+  body { background: #fff; }
+  [data-reveal], [data-labs-reveal] { opacity: 1 !important; transform: none !important; filter: none !important; }
+  .wd { opacity: 1 !important; transform: none !important; animation: none !important; }
+  .gl, .gl--flat, .gl--dark, .gl--mint, .gl--spec {
+    background: #fff !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+    background-image: none !important; box-shadow: inset 0 0 0 1px #d9e0db !important; color: #0f1712 !important;
+  }
+  :root { --on-dark: #16281f; --on-dark-2: #3c5147; --on-dark-3: #5a6b62; }
+  .labs-no-print { display: none !important; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font: 400 .72em/1.3 var(--mono); color: #5a6b62; word-break: break-all; }
+  h1, h2, h3 { break-after: avoid; }
+}

@@ -120,6 +120,67 @@ export function marketTrack(series: ProbabilitySeries, detail: GameDetail): Mark
   return points.length >= 2 ? { source: history.source, team: history.team, captured: history.captured, points } : null;
 }
 
+export interface PriceAtPlay {
+  source: string;
+  /** Whose contract this is the price of. */
+  team: Side;
+  /** The price standing when the play happened, in dollars. */
+  price: number;
+  /** When the exchange recorded it. */
+  at: string;
+  /** How long before the play it was recorded. A minute is normal; much more is a gap in the record. */
+  ageSeconds: number;
+  /** The change from the price standing at the play before this one, or null when there was none to compare. */
+  swing: number | null;
+}
+
+/**
+ * The market price as it stood when a play happened: the last price recorded at or
+ * before that play's wall-clock time, which is the same rule the chart's track uses.
+ *
+ * Nothing is interpolated and nothing is estimated. A price recorded after the play is
+ * not used, because it was not known then, and a play the provider gave no wall-clock
+ * time for cannot be placed at all and gets nothing.
+ */
+export function priceAtPlay(detail: GameDetail, playId: string): PriceAtPlay | null {
+  const history = detail.marketHistory;
+  if (!history || !history.points.length) return null;
+  const index = detail.plays.findIndex((p) => p.id === playId);
+  if (index < 0) return null;
+  const when = detail.plays[index].wallclock ? Date.parse(detail.plays[index].wallclock!) : Number.NaN;
+  if (!Number.isFinite(when)) return null;
+
+  // Points are oldest first, so the last one at or before the moment is the price that stood.
+  const standing = (moment: number): MarketPricePoint | null => {
+    let found: MarketPricePoint | null = null;
+    for (const point of history.points) {
+      const t = Date.parse(point.at);
+      if (!Number.isFinite(t)) continue;
+      if (t > moment) break;
+      found = point;
+    }
+    return found;
+  };
+
+  const now = standing(when);
+  if (!now) return null;
+  let before: MarketPricePoint | null = null;
+  for (let i = index - 1; i >= 0; i--) {
+    const earlier = detail.plays[i].wallclock ? Date.parse(detail.plays[i].wallclock!) : Number.NaN;
+    if (!Number.isFinite(earlier)) continue;
+    before = standing(earlier);
+    break;
+  }
+  return {
+    source: history.source,
+    team: history.team,
+    price: now.price,
+    at: now.at,
+    ageSeconds: Math.max(0, Math.round((when - Date.parse(now.at)) / 1000)),
+    swing: before && before.at !== now.at ? now.price - before.price : null,
+  };
+}
+
 /** The track's price at a position on the chart: the last placed price at or before it. */
 export function trackPriceAt(track: MarketTrack | null, x: number): MarketTrackPoint | null {
   if (!track) return null;

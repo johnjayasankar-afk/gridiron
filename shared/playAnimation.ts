@@ -10,7 +10,12 @@ import type { BallSpot, Conversion, PlayBrief, PlayEvent, PlayKind, Side } from 
 import { ADMIN_KINDS, TOUCHDOWN_KINDS } from './model.js';
 import { fingerprint } from './util.js';
 
-export type AnimationPath = 'sweep' | 'arc' | 'kick' | 'incomplete' | 'sack' | 'settle';
+/**
+ * The shape a play is drawn with, taken from the kind of play the provider
+ * reported and from nothing else. 'pick' is a ball thrown one way and taken back
+ * the other; 'blocked' is a kick that never got away.
+ */
+export type AnimationPath = 'sweep' | 'arc' | 'kick' | 'pick' | 'blocked' | 'incomplete' | 'sack' | 'settle';
 export type AnimationEffect = 'touchdown' | 'field_goal' | 'safety' | 'turnover' | 'penalty' | 'review' | 'first_down' | null;
 
 /** Motion bands in milliseconds: micro (settles, fades), standard (short movement), major (flights and scores). */
@@ -44,6 +49,13 @@ export interface PlayInput {
   /** 'brief' when only a scoreboard summary of the play is known, so the shape is kept to a plain sweep. */
   source: 'play' | 'brief';
 }
+
+/**
+ * Kicks that are struck off the ground or a tee. A placed ball is hit below its
+ * middle and turns end over end; a punt is dropped onto the foot and spirals.
+ * The ball is drawn turning the way the reported kind of kick actually turns.
+ */
+export const PLACE_KICKS = new Set<PlayKind>(['kickoff', 'kickoff_return', 'field_goal_good', 'field_goal_missed', 'field_goal_blocked', 'extra_point']);
 
 export interface PlayAnimation {
   key: string;
@@ -242,29 +254,45 @@ export function planPlayAnimation(previous: SeenPlay | null, input: PlayInput | 
   }
 
   const distance = Math.abs(input.toYard - input.fromYard);
+  // An extra point is a place kick, and the provider says so on the conversion
+  // rather than in the kind. It used to slide along the ground like a run.
+  const kickedConversion = input.kind === 'extra_point' && input.conversion?.kind === 'kick';
+  const blocked = input.kind === 'field_goal_blocked' || input.kind === 'punt_blocked' || (kickedConversion && input.conversion?.result === 'blocked');
   let path: AnimationPath;
   let durationMs: number;
-  switch (input.kind) {
-    case 'pass_complete':
-    case 'touchdown_pass':
-    case 'interception':
+  switch (true) {
+    case blocked:
+      // Up off the foot and knocked straight back down: short, low and quick.
+      path = 'blocked';
+      durationMs = within(420, TIMINGS.standard);
+      break;
+    case input.kind === 'interception':
+      // Thrown one way and taken back the other. A single smooth arc from the
+      // throw to where the RETURN ended drew the ball flying to a spot behind
+      // the line, which is not what happened.
+      path = 'pick';
+      durationMs = within(700 + distance * 5, TIMINGS.major);
+      break;
+    case input.kind === 'pass_complete':
+    case input.kind === 'touchdown_pass':
       path = 'arc';
       durationMs = within(520 + distance * 6, TIMINGS.major);
       break;
-    case 'pass_incomplete':
+    case input.kind === 'pass_incomplete':
       path = 'incomplete';
       durationMs = within(440, TIMINGS.standard);
       break;
-    case 'sack':
+    case input.kind === 'sack':
       path = 'sack';
       durationMs = within(380, TIMINGS.standard);
       break;
-    case 'punt':
-    case 'punt_return':
-    case 'kickoff':
-    case 'kickoff_return':
-    case 'field_goal_good':
-    case 'field_goal_missed':
+    case input.kind === 'punt':
+    case input.kind === 'punt_return':
+    case input.kind === 'kickoff':
+    case input.kind === 'kickoff_return':
+    case input.kind === 'field_goal_good':
+    case input.kind === 'field_goal_missed':
+    case kickedConversion:
       path = 'kick';
       durationMs = within(700 + distance * 4, TIMINGS.major);
       break;
@@ -281,7 +309,8 @@ export function planPlayAnimation(previous: SeenPlay | null, input: PlayInput | 
   let effect: AnimationEffect = null;
   let effectMs = 0;
   if (TOUCHDOWN_KINDS.has(input.kind) && input.scoring !== false) [effect, effectMs] = ['touchdown', 900];
-  else if (input.kind === 'field_goal_good') [effect, effectMs] = ['field_goal', 700];
+  // A kicked conversion the provider called good goes through the uprights too.
+  else if (input.kind === 'field_goal_good' || (kickedConversion && input.conversion?.result === 'good')) [effect, effectMs] = ['field_goal', 700];
   else if (input.kind === 'safety') [effect, effectMs] = ['safety', 700];
   else if (turnover) [effect, effectMs] = ['turnover', 450];
   else if (input.penalty === true || input.kind === 'penalty') [effect, effectMs] = ['penalty', 350];

@@ -6,6 +6,7 @@
  * above the field.
  */
 import { Component, lazy, memo, Suspense, useRef, type ReactNode } from 'react';
+import type { DriveTrack } from '../../shared/driveTrack';
 import type { GameSummary, Situation } from '../../shared/model';
 import type { PlayAnimation } from '../../shared/playAnimation';
 import { reloadForMissingChunk } from '../lib/chunks';
@@ -21,6 +22,8 @@ export interface FieldViewProps {
   game: GameSummary;
   situation: Situation | null;
   animation: PlayAnimation | null;
+  /** The game page only: the drive the field draws behind the ball. */
+  drive?: DriveTrack | null;
   variant: FieldVariant;
   /** Draw no ball: the game has not started, is over, or has no reported spot to show. */
   hidden: boolean;
@@ -72,7 +75,14 @@ export const FieldView = memo(function FieldView({ className = '', children, ...
   return (
     <div ref={slot} className={`field-slot field-${scene.variant} ${className}`} data-field-mode={mode}>
       {mode === '2d' ? (
-        <FieldSvg game={scene.game} situation={scene.hidden ? null : scene.situation} compact={scene.variant === 'compact'} fromYard={trailFrom} historical={scene.historical} />
+        <FieldSvg
+          game={scene.game}
+          situation={scene.hidden ? null : scene.situation}
+          compact={scene.variant === 'compact'}
+          fromYard={trailFrom}
+          historical={scene.historical}
+          drive={scene.variant === 'detail' ? (scene.drive ?? null) : null}
+        />
       ) : near ? (
         <FieldBoundary>
           <Suspense fallback={null}>

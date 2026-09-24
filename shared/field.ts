@@ -146,6 +146,18 @@ export function firstDownTarget(
 }
 
 /** The red zone is inside the opponent's 20-yard line. */
+/**
+ * Which end zone a scoring play reached: the one the ball ended in, or, when the
+ * provider did not report an end spot near one, the one the offense was
+ * attacking. The field lights one end on a score and the arena answers in the
+ * same place, so both ask this here rather than each deciding for itself.
+ */
+export function scoringZone(toYard: number | null, offenseBefore: Side | null): 1 | -1 {
+  const to = toYard === null ? null : worldX(toYard);
+  if (to !== null && Math.abs(to) >= 40) return Math.sign(to) as 1 | -1;
+  return offenseBefore ? attackDirection(offenseBefore) : 1;
+}
+
 export const RED_ZONE_START = 80;
 export function isInRedZone(progress: number | null): boolean | null {
   return progress === null ? null : progress >= RED_ZONE_START;

@@ -29,7 +29,7 @@
  * state throughout, and the scenario says so.
  */
 import { pricePoints, type PriceCandle } from '../../shared/marketHistory.js';
-import type { Division, LeagueId, MarketHistory, MarketPrices, MarketQuote } from '../../shared/model.js';
+import type { BettingLines, Division, LeagueId, LineHistory, LinePoint, LinePrice, MarketHistory, MarketPrices, MarketQuote } from '../../shared/model.js';
 import { quotePrice } from '../../shared/odds.js';
 
 type Raw = Record<string, any>;
@@ -79,6 +79,17 @@ export interface GameTimeline {
   edits: TimelineEdit[];
   /** Exchange prices captured for this game, attached for real replays only. */
   market: CapturedMarket | null;
+  /**
+   * The sportsbook's line as Gridiron recorded it while this game ran.
+   *
+   * The provider reports an opening line and a closing one and nothing between,
+   * and has no endpoint that says what a line was at a past moment: the core
+   * API's own movement collection exists and is always empty. So unlike the
+   * exchange, whose history can be asked for after the fact, a book's line can
+   * only be known for a game somebody was watching at the time. A scenario
+   * captured before Gridiron recorded one simply has none, and says so.
+   */
+  lines: CapturedLines | null;
 }
 
 const STOPPAGE = /timeout|two-minute|end period|end of |coin toss/i;
@@ -103,7 +114,67 @@ export function buildTimeline(league: LeagueId, event: Raw, summary: Raw, divisi
   const kickoffAt = scoreOnly ? scheduled : Math.min(...plays.map((p) => p.t));
   const endPlay = [...plays].reverse().find((p) => /end of game/i.test(p.raw.type?.text ?? ''));
   const endAt = scoreOnly ? Number.NEGATIVE_INFINITY : endPlay ? endPlay.t : Math.max(...plays.map((p) => p.t)) + 5 * 60_000;
-  return { id: `${league}-${event.id}`, league, providerEventId: String(event.id), divisions, event, summary, plays, kickoffAt, endAt, scoreOnly, edits: [], market: null };
+  return { id: `${league}-${event.id}`, league, providerEventId: String(event.id), divisions, event, summary, plays, kickoffAt, endAt, scoreOnly, edits: [], market: null, lines: null };
+}
+
+/** The line a book was offering, as Gridiron saw it, each reading stamped with when it was seen. */
+export interface CapturedLines {
+  provider: string;
+  points: LinePoint[];
+}
+
+/** The last reading taken at or before virtual time `tv`, which is the line that stood then. */
+function lineAt(tl: GameTimeline, tv: number): LinePoint | null {
+  let found: LinePoint | null = null;
+  for (const point of tl.lines?.points ?? []) {
+    const at = Date.parse(point.at);
+    if (!Number.isFinite(at)) continue;
+    if (at > tv) break;
+    found = point;
+  }
+  return found;
+}
+
+/**
+ * The book's line as a live reader would have seen it at virtual time `tv`,
+ * shaped back into the model the page draws. The opening line is the first
+ * reading recorded, because that is the earliest the record can speak to, and
+ * `latest` is the reading standing now. Nothing before the first reading, as
+ * live: a replay wound back before Gridiron started watching has no line.
+ */
+export function linesAt(tl: GameTimeline, tv: number): BettingLines | null {
+  const now = lineAt(tl, tv);
+  if (!tl.lines || !now) return null;
+  const first = tl.lines.points[0];
+  const price = (line: number | null, odds: number | null): LinePrice | null => (line === null ? null : { line, odds });
+  const spread =
+    now.spreadHome === null && now.spreadAway === null
+      ? null
+      : {
+          home: { open: price(first.spreadHome, first.spreadOddsHome), latest: price(now.spreadHome, now.spreadOddsHome) },
+          away: { open: price(first.spreadAway, first.spreadOddsAway), latest: price(now.spreadAway, now.spreadOddsAway) },
+        };
+  const moneyline = now.moneylineHome === null && now.moneylineAway === null ? null : { home: { open: first.moneylineHome, latest: now.moneylineHome }, away: { open: first.moneylineAway, latest: now.moneylineAway } };
+  const total =
+    now.total === null
+      ? null
+      : {
+          over: { open: price(first.total, first.totalOddsOver), latest: price(now.total, now.totalOddsOver) },
+          under: { open: price(first.total, first.totalOddsUnder), latest: price(now.total, now.totalOddsUnder) },
+        };
+  if (!spread && !moneyline && !total) return null;
+  const homeLine = now.spreadHome;
+  return { provider: tl.lines.provider, details: null, favorite: homeLine !== null && homeLine !== 0 ? (homeLine < 0 ? 'home' : 'away') : null, spread, moneyline, total };
+}
+
+/** The recorded line up to virtual time `tv`, so a replay rewinds it exactly as a live session does. */
+export function lineHistoryAt(tl: GameTimeline, tv: number): LineHistory | null {
+  if (!tl.lines) return null;
+  const points = tl.lines.points.filter((p) => {
+    const at = Date.parse(p.at);
+    return Number.isFinite(at) && at <= tv;
+  });
+  return points.length ? { provider: tl.lines.provider, points, captured: true } : null;
 }
 
 /** A contract's order book at the end of the latest minute recorded by `tv`, with its most recent trade by then. */

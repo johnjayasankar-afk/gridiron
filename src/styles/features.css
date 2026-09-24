@@ -1574,3 +1574,31 @@ a.season-node:hover {
   color: var(--text-2);
   text-align: center;
 }
+
+/* ---------------------------------------------------------------- the reel */
+
+/*
+ * Watching the game's scores one after another is a different thing from
+ * scrubbing through it, so its control looks different from the step buttons
+ * beside it: a filled button while it runs, a quiet one while it does not.
+ */
+.rp-reel {
+  border: 1px solid var(--border-2);
+  background: var(--surface-sunk);
+  color: var(--text-2);
+}
+
+.rp-reel:not(:disabled):hover {
+  color: var(--text);
+  border-color: var(--live);
+}
+
+.rp-reel.is-on {
+  background: color-mix(in srgb, var(--live) 18%, transparent);
+  border-color: var(--live);
+  color: var(--live-ink, var(--text));
+}
+
+:root[data-theme='dark'] .rp-reel.is-on {
+  color: var(--mint-2);
+}

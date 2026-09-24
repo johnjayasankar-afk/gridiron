@@ -4,7 +4,7 @@
  * play-by-play, drives, scoring, team stats and broadcast information.
  * Historical views are shareable through ?play=<provider play id>.
  */
-import { ArrowLeft, Bell, BellOff, ChevronLeft, ChevronRight, Copy, Crosshair, Minus, Pause, PictureInPicture2, Pin, PinOff, Play, Plus, RotateCcw, Share2, SkipBack, SkipForward, StepBack, StepForward } from 'lucide-react';
+import { ArrowLeft, Bell, BellOff, ChevronLeft, ChevronRight, Clapperboard, Copy, Crosshair, Minus, Pause, PictureInPicture2, Pin, PinOff, Play, Plus, RotateCcw, Share2, SkipBack, SkipForward, Square, StepBack, StepForward } from 'lucide-react';
 import { openPopout, popoutSupported } from '../components/Popout';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { scoreText, statusShort, teamFor } from '../../shared/format';
@@ -17,6 +17,9 @@ import { navigate, setParams, useLocation } from '../app/router';
 import { IconButton, Segmented } from '../components/controls';
 import { fieldMessage } from '../components/GameCard';
 import type { CameraPreset } from '../field/cameras';
+import { driveTrack } from '../../shared/driveTrack';
+import { useFieldSound } from '../app/useFieldSound';
+import { skyFor, skyLabel } from '../../shared/sky';
 import { FieldView } from '../field/FieldView';
 import { usePlayAnimation } from '../field/usePlayAnimation';
 import { useReducedMotion } from '../lib/motion';
@@ -145,7 +148,7 @@ function CameraBar({ preset, onPreset, onReset, onZoom }: { preset: CameraPreset
   );
 }
 
-type Inspect = (order: number | null, options?: { playing?: boolean; driveId?: string | null }) => void;
+type Inspect = (order: number | null, options?: { playing?: boolean; reel?: boolean; driveId?: string | null }) => void;
 
 function ReplayControls({ detail, game, inspection, onInspect, newPlays }: { detail: GameDetail; game: GameSummary; inspection: Inspection; onInspect: Inspect; newPlays: number }) {
   const driveId = inspection.driveId;
@@ -163,6 +166,14 @@ function ReplayControls({ detail, game, inspection, onInspect, newPlays }: { det
     if (inspection.playing) return patch({ playing: false });
     const start = order === null || index >= plays.length - 1 ? (plays[0]?.order ?? null) : order;
     if (start !== null) onInspect(start, { playing: true });
+  };
+
+  // The reel always runs the whole game's scores, from the first, whatever is
+  // on screen when it starts.
+  const reelAt = inspection.reel && order !== null ? scoring.indexOf(order) : -1;
+  const toggleReel = () => {
+    if (inspection.reel) return patch({ reel: false });
+    if (scoring.length) onInspect(scoring[0], { reel: true, driveId: null });
   };
 
   return (
@@ -243,6 +254,22 @@ function ReplayControls({ detail, game, inspection, onInspect, newPlays }: { det
             })}
           </select>
         </label>
+        <button
+          type="button"
+          className={`btn btn-sm rp-reel${inspection.reel ? ' is-on' : ''}`}
+          disabled={!scoring.length}
+          aria-pressed={inspection.reel}
+          onClick={toggleReel}
+          title={inspection.reel ? 'Stop the reel' : 'Watch every scoring play in order'}
+        >
+          {inspection.reel ? <Square size={13} aria-hidden="true" /> : <Clapperboard size={13} aria-hidden="true" />}
+          <span>{inspection.reel ? 'Stop the reel' : 'Play the scores'}</span>
+        </button>
+        {reelAt >= 0 && (
+          <p className="rp-readout mono" role="status">
+            Score {reelAt + 1} of {scoring.length}
+          </p>
+        )}
         <button type="button" className="btn btn-ghost btn-sm" disabled={!current} onClick={() => onInspect(firstOrderOfDrive(detail, current), { driveId: current })}>
           Current drive
         </button>
@@ -317,7 +344,7 @@ export function DetailView({ id }: { id: string }) {
   const swipe = useRef<{ x: number; y: number; pointer: number } | null>(null);
 
   useEffect(() => {
-    useUi.getState().setInspection({ gameId: id, order: null, playing: false, speed: 1, driveId: null, knownPlays: 0 });
+    useUi.getState().setInspection({ gameId: id, order: null, playing: false, reel: false, speed: 1, driveId: null, knownPlays: 0 });
     return () => useUi.getState().setInspection(null);
   }, [id]);
 
@@ -330,7 +357,7 @@ export function DetailView({ id }: { id: string }) {
       const cur = ui.inspection;
       if (!cur || cur.gameId !== id) return;
       if (order === null) {
-        ui.patchInspection({ order: null, playing: false, driveId: null });
+        ui.patchInspection({ order: null, playing: false, reel: false, driveId: null });
         setParams({ play: null });
         return;
       }
@@ -338,6 +365,9 @@ export function DetailView({ id }: { id: string }) {
       ui.patchInspection({
         order,
         playing: options.playing ?? false,
+        // Anything the viewer does by hand ends the reel, because they have
+        // taken the game back off it.
+        reel: options.reel ?? false,
         driveId: options.driveId !== undefined ? options.driveId : cur.driveId,
         knownPlays: cur.order === null ? plays.length : cur.knownPlays,
       });
@@ -355,6 +385,37 @@ export function DetailView({ id }: { id: string }) {
     const p = detail.plays.find((x) => x.providerId === playParam);
     if (p && !ADMIN_KINDS.has(p.kind) && inspection.order !== p.order) inspect(p.order, { driveId: null });
   }, [detail, playParam, inspection, inspect]);
+
+  /*
+   * The reel: the game's scoring plays, one after another.
+   *
+   * It is the same driver as the replay below, walking a shorter list. The beat
+   * is longer because a score is a movement and then an effect and then a
+   * moment to see what happened, and it scales with the replay speed like
+   * everything else here.
+   */
+  useEffect(() => {
+    if (!inspection?.reel || !detail) return;
+    const scores = scoringOrders(detail);
+    if (!scores.length) {
+      useUi.getState().patchInspection({ reel: false });
+      return;
+    }
+    // Started from the keyboard, or landed somewhere that is not a score: go to
+    // the first one at once rather than waiting out a beat on the wrong play.
+    if (inspection.order === null || !scores.includes(inspection.order)) {
+      inspect(scores[0], { reel: true, driveId: null });
+      return;
+    }
+    const t = setTimeout(() => {
+      const next = scores.find((o) => o > (inspection.order ?? -1));
+      // The last score has already been held for a beat, so the reel ends by
+      // handing the game back rather than leaving the viewer parked on it.
+      if (next === undefined) inspect(null);
+      else inspect(next, { reel: true, driveId: null });
+    }, Math.max(1400, 3000 / inspection.speed));
+    return () => clearTimeout(t);
+  }, [inspection?.reel, inspection?.order, inspection?.speed, detail, inspect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Replay playback steps through reported plays.
   useEffect(() => {
@@ -376,11 +437,26 @@ export function DetailView({ id }: { id: string }) {
     if (!frame || !detail) return null;
     const prev = previousFrame.current;
     const steppedForward = prev !== null && stepOrder(detail, prev, 1) === frame.play.order;
-    return planPlayAnimation(null, playInputFromEvent(frame.play), { reducedMotion, burst: !steppedForward });
-  }, [frame?.play.id, frame?.play.revision, reducedMotion]); // eslint-disable-line react-hooks/exhaustive-deps
+    // A jump is a burst and draws no movement, which is right for landing on a
+    // play and wrong for the reel: there the jump IS the thing being watched.
+    return planPlayAnimation(null, playInputFromEvent(frame.play), { reducedMotion, burst: !steppedForward && !inspection?.reel });
+  }, [frame?.play.id, frame?.play.revision, reducedMotion, inspection?.reel]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     previousFrame.current = frame?.play.order ?? null;
   }, [frame?.play.order]);
+
+  /*
+   * The drive, built once. The chart beside the field and the field itself draw
+   * the same one, and building it twice would let them disagree about where a
+   * replayed drive is cut.
+   */
+  const driveFrameId = frame ? frame.play.driveId : undefined;
+  const driveFrameOrder = frame ? frame.play.order : null;
+  const drive = useMemo(() => {
+    // A replayed play that belongs to no reported drive has no drive to show.
+    if (!detail || driveFrameId === null) return null;
+    return driveTrack(detail, driveFrameId === undefined ? { situation: liveSituation.situation } : { driveId: driveFrameId, upToOrder: driveFrameOrder });
+  }, [detail, liveSituation.situation, driveFrameId, driveFrameOrder]);
 
   const since = useSeenOrder(id, detail, historical);
   const summary = useMemo(() => (detail ? catchUp(detail, since, bigPlayYards) : null), [detail, since, bigPlayYards]);
@@ -388,6 +464,17 @@ export function DetailView({ id }: { id: string }) {
   useEffect(() => {
     if (game) document.title = `${scoreText(game)} · ${statusShort(game.status)} · Gridiron`;
   }, [game]);
+
+  /*
+   * The field's sounds follow the same play the field draws, live or stepped.
+   * It belongs up here with the other hooks and not beside the field it goes
+   * with: the states below return early, and a render that took one of those
+   * paths would leave this hook uncalled. React counts hooks, so the next render
+   * that got past them would be calling one more than the last and would throw.
+   */
+  useFieldSound(frame ? frameAnimation : liveMoment.animation);
+  // The weather the provider reports at this venue, which is what lights the field.
+  const skyCaption = skyLabel(skyFor(game?.weather, game?.venue?.indoor));
 
   if (!valid) {
     return (
@@ -420,6 +507,7 @@ export function DetailView({ id }: { id: string }) {
   const fieldSituation = frame ? frame.situation : liveSituation.situation;
   const hasSpot = !!fieldSituation && fieldSituation.spot.schematicYard !== null && (frame !== null || live);
   const message = frame ? (hasSpot ? null : 'Ball spot unavailable for this play') : fieldMessage(game, hasSpot);
+
   const label = frame ? (frameAnimation?.label ?? null) : liveMoment.label;
   const labelKey = frame ? `frame:${frame.play.id}` : (liveMoment.labelKey ?? 'live');
   const newPlays = historical && inspection ? Math.max(0, plays.length - inspection.knownPlays) : 0;
@@ -491,6 +579,7 @@ export function DetailView({ id }: { id: string }) {
             game={game}
             situation={hasSpot ? fieldSituation : null}
             animation={frame ? frameAnimation : liveMoment.animation}
+            drive={drive}
             variant="detail"
             hidden={!hasSpot}
             historical={!!frame}
@@ -523,6 +612,8 @@ export function DetailView({ id }: { id: string }) {
             )}
             <span className="field-orientation mono" aria-hidden="true">
               Schematic · {game.away.abbreviation} defends left
+              {/* The sky the field is lit by, in the provider's own words, so the light is attributable and not a mood. */}
+              {skyCaption && <span className="field-sky"> · {skyCaption}</span>}
             </span>
             {fieldMode === '3d' && (
               <span className="field-hint" aria-hidden="true">
@@ -535,7 +626,7 @@ export function DetailView({ id }: { id: string }) {
         <aside className="detail-side">
           <SituationPanel game={game} situation={fieldSituation} lastKnown={!frame && liveSituation.lastKnown} frame={frame} />
           <OddsPanel game={game} detail={detail} frame={frame} replay={world.mode === 'replay'} />
-          {detail && game.status.kind !== 'scheduled' && <DriveChart detail={detail} game={game} situation={liveSituation.situation} frame={frame} onSelectPlay={(order, driveId) => inspect(order, { driveId })} />}
+          {detail && game.status.kind !== 'scheduled' && <DriveChart track={drive} game={game} situation={liveSituation.situation} frame={frame} onSelectPlay={(order, driveId) => inspect(order, { driveId })} />}
           {summary && plays.length > 0 && <CatchUpPanel summary={summary} sinceLabel={since === null ? 'Key moments' : 'Since your last visit'} onSelect={(o) => selectPlay(o)} />}
           {detail && <LeadersPanel detail={detail} game={game} />}
         </aside>

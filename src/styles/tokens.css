@@ -33,7 +33,9 @@
   --ink: #0f1712;
   --ink-2: #48524c;
   --ink-3: #5f6862;
-  --tone: #6f7f75;
+  /* 4.73:1 on paper. At #6f7f75 it was 4.22, and the eyebrow that wears it is
+     11px at weight 500, which WCAG measures against 4.5. */
+  --tone: #67776d;
 
   --line: rgba(28, 51, 38, 0.09);
   --line-2: rgba(28, 51, 38, 0.16);

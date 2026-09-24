@@ -12,7 +12,7 @@ import { SHORTCUTS } from '../app/useShortcuts';
 import { replayApi, type ReplayScenario } from '../data/api';
 import { useNow } from '../lib/motion';
 import { shareLink } from '../lib/share';
-import { playChime, unlockSound } from '../lib/sound';
+import { playChime, playFieldSound, unlockSound } from '../lib/sound';
 import { clockTime } from '../lib/time';
 import { useGraphics } from '../state/graphics';
 import { useLive, usePresentedWorld } from '../state/live';
@@ -378,10 +378,27 @@ export function SettingsDialog({ open, onClose }: DialogOpen) {
   const density = usePrefs((s) => s.density);
   const delaySeconds = usePrefs((s) => s.delaySeconds);
   const divisions = usePrefs((s) => s.divisions);
+  const fieldSound = usePrefs((s) => s.fieldSound);
   const graphics = useGraphics();
   const [custom, setCustom] = useState(String(delaySeconds));
+  const [fieldSoundNote, setFieldSoundNote] = useState<string | null>(null);
   const set = usePrefs.getState().set;
   const isPreset = (DELAY_PRESETS as readonly number[]).includes(delaySeconds);
+
+  // The browser only allows audio after an interaction, and turning this on is
+  // one, so the context is opened here and a play's sound is used as the test.
+  const toggleFieldSound = async (on: boolean) => {
+    if (!on) {
+      set({ fieldSound: false });
+      setFieldSoundNote(null);
+      return;
+    }
+    if (await unlockSound()) {
+      set({ fieldSound: true });
+      playFieldSound('firstDown');
+      setFieldSoundNote('Field sounds are on. That was a first down.');
+    } else setFieldSoundNote('This browser blocked audio. Click anywhere on the page, then try again.');
+  };
 
   return (
     <Dialog open={open} onClose={onClose} title="Display" size="md">
@@ -431,6 +448,13 @@ export function SettingsDialog({ open, onClose }: DialogOpen) {
             Retry 3D
           </button>
         )}
+        <Switch
+          label="Field sounds"
+          description="Short sounds for what happens on the field, on a game page only. Quieter than the alert chime, and off until you turn it on here."
+          checked={fieldSound}
+          onChange={(v) => void toggleFieldSound(v)}
+        />
+        {fieldSoundNote && <p className="form-hint">{fieldSoundNote}</p>}
       </section>
       <section className="settings-section">
         <h3 className="settings-title">Cards</h3>

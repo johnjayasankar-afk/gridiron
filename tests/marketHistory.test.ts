@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { candlesFrom } from '../server/markets/kalshi';
 import { applyDetailDelta, computeDetailDelta } from '../shared/detailDelta';
-import { formatCents, marketTrack, pricePoints, priceSummary, sameHistory, trackPriceAt, type PriceCandle } from '../shared/marketHistory';
+import { formatCents, marketTrack, priceAtPlay, pricePoints, priceSummary, sameHistory, trackPriceAt, type PriceCandle } from '../shared/marketHistory';
 import type { GameDetail, MarketHistory } from '../shared/model';
 import type { ProbabilitySeries } from '../shared/winProbability';
 
@@ -140,5 +140,44 @@ describe('market price history', () => {
     const removed = computeDetailDelta(detailWith(b), detailWith(null), 3, 4);
     expect(removed.marketHistory).toBeNull();
     expect(applyDetailDelta(detailWith(b), removed).marketHistory).toBeUndefined();
+  });
+});
+
+/**
+ * Looking at an earlier play should show the market as it stood then, not as it stands
+ * now. The rule is the one the chart already uses: the last price recorded at or before
+ * the play's wall-clock time. Nothing is interpolated, and a price recorded after the
+ * play is never used, because it was not known then.
+ */
+describe('the price standing at a play', () => {
+  const detail = detailWith(
+    history([
+      ['16:58', 0.4],
+      ['17:05', 0.52],
+      ['17:15', 0.61],
+      ['17:25', 0.7],
+    ]),
+  );
+
+  it('takes the last price recorded before the play, never one recorded after it', () => {
+    // The play at 17:10 gets the 17:05 price, not the 17:15 one.
+    expect(priceAtPlay(detail, 'nfl-1:2')).toMatchObject({ price: 0.52, at: at('17:05'), source: 'Kalshi', team: 'home' });
+    expect(priceAtPlay(detail, 'nfl-1:3')).toMatchObject({ price: 0.61, at: at('17:15') });
+    // and says how old the reading was, so a gap in the record can be seen
+    expect(priceAtPlay(detail, 'nfl-1:2')!.ageSeconds).toBe(300);
+  });
+
+  it('measures the change against the price standing at the play before', () => {
+    // 0.61 at the third play against 0.52 at the second.
+    expect(priceAtPlay(detail, 'nfl-1:3')!.swing).toBeCloseTo(0.09, 6);
+    // The first play has nothing before it to compare with.
+    expect(priceAtPlay(detail, 'nfl-1:1')!.swing).toBeNull();
+  });
+
+  it('gives nothing when there is nothing to place the play by', () => {
+    expect(priceAtPlay(detailWith(null), 'nfl-1:2')).toBeNull();
+    expect(priceAtPlay(detail, 'nfl-1:nope')).toBeNull();
+    // A price recorded only after the play leaves it with none.
+    expect(priceAtPlay(detailWith(history([['18:00', 0.9]])), 'nfl-1:2')).toBeNull();
   });
 });

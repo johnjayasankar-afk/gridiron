@@ -244,6 +244,45 @@ var EMPTY_FRESHNESS = {
   consecutiveFailures: 0
 };
 
+// shared/lineHistory.ts
+var FIGURES = ["spreadHome", "spreadAway", "spreadOddsHome", "spreadOddsAway", "total", "totalOddsOver", "totalOddsUnder", "moneylineHome", "moneylineAway"];
+var MAX_LINE_POINTS = 240;
+function linePointFrom(lines, at2) {
+  if (!lines) return null;
+  const point = {
+    at: at2,
+    spreadHome: lines.spread?.home.latest?.line ?? null,
+    spreadAway: lines.spread?.away.latest?.line ?? null,
+    spreadOddsHome: lines.spread?.home.latest?.odds ?? null,
+    spreadOddsAway: lines.spread?.away.latest?.odds ?? null,
+    total: lines.total?.over.latest?.line ?? null,
+    totalOddsOver: lines.total?.over.latest?.odds ?? null,
+    totalOddsUnder: lines.total?.under.latest?.odds ?? null,
+    moneylineHome: lines.moneyline?.home.latest ?? null,
+    moneylineAway: lines.moneyline?.away.latest ?? null
+  };
+  const empty = FIGURES.every((k) => point[k] === null);
+  return empty ? null : point;
+}
+function sameLine(a, b) {
+  if (!a || !b) return a === b;
+  return FIGURES.every((k) => a[k] === b[k]);
+}
+function recordLine(history, lines, at2) {
+  const point = linePointFrom(lines, at2);
+  if (!point) return history;
+  const provider = lines.provider;
+  if (!history) return { provider, points: [point], captured: false };
+  const last = history.points[history.points.length - 1] ?? null;
+  if (sameLine(last, point)) return history;
+  const points = [...history.points, point];
+  return { ...history, provider, points: points.length > MAX_LINE_POINTS ? points.slice(points.length - MAX_LINE_POINTS) : points };
+}
+function sameLineHistory(a, b) {
+  if (!a || !b) return (a ?? null) === (b ?? null);
+  return a.provider === b.provider && a.points.length === b.points.length && sameLine(a.points[a.points.length - 1] ?? null, b.points[b.points.length - 1] ?? null);
+}
+
 // shared/odds.ts
 var MINUS = "\u2212";
 function parseAmerican(raw) {
@@ -315,7 +354,8 @@ function computeDetailDelta(prev, next, baseVersion, version) {
     removed,
     order: next.plays.map((p) => p.id),
     ...sameSeries(prev?.winProbability, next.winProbability) ? {} : { winProbability: next.winProbability ?? [] },
-    ...sameHistory(prev?.marketHistory, next.marketHistory) ? {} : { marketHistory: next.marketHistory ?? null }
+    ...sameHistory(prev?.marketHistory, next.marketHistory) ? {} : { marketHistory: next.marketHistory ?? null },
+    ...sameLineHistory(prev?.lineHistory, next.lineHistory) ? {} : { lineHistory: next.lineHistory ?? null }
   };
 }
 
@@ -344,6 +384,20 @@ function withDerivedSituation(detail) {
   const situation = situationFromPlays(detail.plays);
   return situation ? { ...detail, summary: { ...detail.summary, situation } } : detail;
 }
+function mergeTeam(prev, next) {
+  if (prev.key !== next.key) return next;
+  const same = next.logo === (next.logo ?? prev.logo) && next.logoDark === (next.logoDark ?? prev.logoDark) && next.color === (next.color ?? prev.color) && next.alternateColor === (next.alternateColor ?? prev.alternateColor) && next.location === (next.location ?? prev.location) && next.conferenceId === (next.conferenceId ?? prev.conferenceId);
+  if (same) return next;
+  return {
+    ...next,
+    logo: next.logo ?? prev.logo,
+    logoDark: next.logoDark ?? prev.logoDark,
+    color: next.color ?? prev.color,
+    alternateColor: next.alternateColor ?? prev.alternateColor,
+    location: next.location ?? prev.location,
+    conferenceId: next.conferenceId ?? prev.conferenceId
+  };
+}
 function mergeSummaries(prev, next) {
   const prevAt = prev.receivedAt ?? 0;
   const nextAt = next.receivedAt ?? 0;
@@ -353,6 +407,8 @@ function mergeSummaries(prev, next) {
   const heldProbability = prev.winProbability;
   return {
     ...next,
+    home: mergeTeam(prev.home, next.home),
+    away: mergeTeam(prev.away, next.away),
     divisions: next.source === "summary" || next.divisions.length === 0 ? prev.divisions : next.divisions,
     situation,
     // Lines and the pre-game prediction change rarely, so a report without them does not erase them.
@@ -365,7 +421,14 @@ function mergeSummaries(prev, next) {
     broadcasts: next.broadcasts.length ? next.broadcasts : prev.broadcasts,
     notes: next.notes.length ? next.notes : prev.notes,
     links: { gamePage: next.links.gamePage ?? prev.links.gamePage },
-    venue: next.venue ?? prev.venue,
+    /*
+     * A venue's own facts survive a report that left them out, the same rule the
+     * teams' branding follows: the summary payload names a venue without its id,
+     * its roof or its surface, and taking it wholesale would throw away what the
+     * scoreboard and the venue document had already found.
+     */
+    venue: next.venue && prev.venue && next.venue.name === prev.venue.name ? { ...next.venue, id: next.venue.id ?? prev.venue.id, indoor: next.venue.indoor ?? prev.venue.indoor, grass: next.venue.grass ?? prev.venue.grass } : next.venue ?? prev.venue,
+    weather: next.weather ?? prev.weather,
     coverage: next.source === "summary" && prev.coverage.level !== "unknown" && next.coverage.level === "unknown" ? prev.coverage : next.coverage
   };
 }
@@ -424,6 +487,8 @@ var DEFAULT_INTERVALS = {
 };
 var DEFAULT_DIVISIONS = ["FBS", "FCS"];
 var LEVEL_RANK = { focus: 3, visible: 2, background: 1 };
+var ON_DEMAND_RETRY_MS = { slate: 3e4, detail: 1e4 };
+var ON_DEMAND_EARLY_MS = 3e3;
 var iso = (ms) => new Date(ms).toISOString();
 var newLeague = () => ({
   games: /* @__PURE__ */ new Map(),
@@ -457,6 +522,15 @@ var GridironEngine = class {
   marketsAttached;
   historyReader;
   histories = /* @__PURE__ */ new Map();
+  /*
+   * Gridiron's own record of a sportsbook's line. The provider reports an
+   * opening and a latest line with no times attached, which is two numbers and
+   * not a history, so a game page could say what a prediction market traded at
+   * during any play and could not say the same about the book. Every reading
+   * that differs from the last one written down becomes a point, stamped with
+   * when it was seen; nothing is ever written for a moment nobody looked at.
+   */
+  lines = /* @__PURE__ */ new Map();
   seq = 0;
   running = false;
   constructor(options) {
@@ -628,9 +702,9 @@ var GridironEngine = class {
   async getSlate(date, waitMs = 1e4) {
     const day = this.ensureDay(date);
     day.lastRequested = this.now();
-    if (!day.leagues.nfl.fetched || !day.leagues.cfb.fetched) {
-      await withTimeout(Promise.all([this.refreshLeague("nfl", date), this.refreshLeague("cfb", date)]), waitMs);
-    }
+    const unfetched = !day.leagues.nfl.fetched || !day.leagues.cfb.fetched;
+    const due = unfetched ? ["nfl", "cfb"] : this.running ? [] : ["nfl", "cfb"].filter((league) => this.dueOnDemand(day, league));
+    if (due.length) await withTimeout(Promise.all(due.map((league) => this.refreshLeague(league, date))), waitMs);
     if (this.marketReader) {
       const games = [...day.leagues.nfl.games.values(), ...day.leagues.cfb.games.values()];
       const prices = await withTimeout(
@@ -649,7 +723,10 @@ var GridironEngine = class {
     const entry = this.ensureDetail(gameId2);
     entry.lastRequested = this.now();
     const age = entry.freshness.lastSuccessAt ? this.now() - Date.parse(entry.freshness.lastSuccessAt) : Infinity;
-    if (!entry.detail || age > this.intervals.detailFocus) await withTimeout(this.refreshDetail(gameId2), waitMs);
+    const sinceAttempt = entry.freshness.lastAttemptAt ? this.now() - Date.parse(entry.freshness.lastAttemptAt) : Infinity;
+    const spaced = this.running || !entry.failures || sinceAttempt >= ON_DEMAND_RETRY_MS.detail;
+    const stale = age > this.intervals.detailFocus - (this.running ? 0 : ON_DEMAND_EARLY_MS);
+    if ((!entry.detail || stale) && spaced) await withTimeout(this.refreshDetail(gameId2), waitMs);
     if (this.historyReader && entry.detail) await withTimeout(this.refreshHistory(gameId2), 3e3);
     return { version: entry.version, detail: entry.detail, freshness: entry.freshness };
   }
@@ -767,6 +844,7 @@ var GridironEngine = class {
       const prev = slate.games.get(stamped.id);
       const merged = this.withMarket(prev ? mergeSummaries(prev, stamped) : stamped);
       slate.games.set(stamped.id, merged);
+      this.recordLines(stamped.id, merged, result.receivedAt);
       const print = summaryPrint(merged);
       if (slate.prints.get(stamped.id) !== print) {
         slate.prints.set(stamped.id, print);
@@ -838,7 +916,9 @@ var GridironEngine = class {
       ...detail,
       summary: { ...detail.summary, receivedAt, source: "summary", divisions: summary?.divisions ?? detail.summary.divisions }
     });
-    const stamped = this.historyReader ? { ...derived, marketHistory: this.histories.get(id)?.history ?? null } : derived;
+    const withMarket = this.historyReader ? { ...derived, marketHistory: this.histories.get(id)?.history ?? null } : derived;
+    this.recordLines(id, derived.summary, receivedAt, false);
+    const stamped = this.mode === "replay" ? withMarket : { ...withMarket, lineHistory: this.lines.get(id) ?? null };
     const print = fingerprint(JSON.stringify({ ...stamped, summary: { ...stamped.summary, receivedAt: 0 } }));
     const changed = print !== entry.print;
     entry.freshness = {
@@ -904,6 +984,29 @@ var GridironEngine = class {
       slot.inflight = null;
     });
     return slot.inflight;
+  }
+  /** Writes down a sportsbook's line when it differs from the last reading taken. */
+  recordLines(id, summary, receivedAt, attach = true) {
+    if (this.mode === "replay") return;
+    const held = this.lines.get(id) ?? null;
+    const next = recordLine(held, summary.lines, iso(receivedAt));
+    if (next === held || !next) return;
+    this.lines.set(id, next);
+    if (attach) this.attachLines(id);
+  }
+  /** Puts the recorded line on a game's detail when it differs, as a new detail version. */
+  attachLines(id) {
+    const entry = this.details.get(id);
+    if (!entry?.detail) return;
+    const history = this.lines.get(id) ?? null;
+    if (sameLineHistory(entry.detail.lineHistory, history)) return;
+    const next = { ...entry.detail, lineHistory: history };
+    entry.previous = entry.detail;
+    entry.detail = next;
+    entry.print = fingerprint(JSON.stringify({ ...next, summary: { ...next.summary, receivedAt: 0 } }));
+    entry.version++;
+    entry.delta = computeDetailDelta(entry.previous, next, entry.version - 1, entry.version);
+    this.emitDetail(id, entry);
   }
   /** Puts the held price history on a game's detail when it differs, as a new detail version. */
   attachHistory(id) {
@@ -1054,6 +1157,17 @@ var GridironEngine = class {
       }
     }
   }
+  /** How often a day's slate is polled while it is healthy: live, idle, or a past day. */
+  slateInterval(day) {
+    if (this.hasActive(day) || this.hasImminent(day)) return this.intervals.slateLive;
+    return day.date < this.todayKey() ? this.intervals.slatePast : this.intervals.slateIdle;
+  }
+  /** Serverless deployments: whether a request should ask the provider for a league again. */
+  dueOnDemand(day, league) {
+    const slate = day.leagues[league];
+    const since = slate.freshness.lastAttemptAt ? this.now() - Date.parse(slate.freshness.lastAttemptAt) : Infinity;
+    return since >= (slate.failures ? ON_DEMAND_RETRY_MS.slate : this.slateInterval(day) - ON_DEMAND_EARLY_MS);
+  }
   /** Milliseconds until a task should run again, or null when it is no longer needed. */
   intervalFor(key) {
     const [kind, a, b] = key.split("|");
@@ -1062,9 +1176,7 @@ var GridironEngine = class {
       if (!this.activeDates().has(date)) return null;
       const day = this.ensureDay(date);
       const failures2 = day.leagues[a].failures;
-      let base2 = this.intervals.slateIdle;
-      if (this.hasActive(day) || this.hasImminent(day)) base2 = this.intervals.slateLive;
-      else if (date < this.todayKey()) base2 = this.intervals.slatePast;
+      const base2 = this.slateInterval(day);
       return failures2 ? Math.min(5 * 6e4, base2 * 2 ** Math.min(failures2, 4)) : base2;
     }
     const id = a;
@@ -1157,6 +1269,14 @@ function loadConfig(env = process.env, root = process.cwd()) {
 import { createReadStream, existsSync as existsSync2, statSync } from "node:fs";
 import { extname, join, normalize, resolve as resolve2 } from "node:path";
 import { randomUUID } from "node:crypto";
+
+// shared/availability.ts
+function feedUnknown(freshness) {
+  return !!freshness && freshness.health === "unavailable" && !freshness.lastSuccessAt;
+}
+function anyFeedUnknown(freshness) {
+  return Object.values(freshness ?? {}).some((f) => feedUnknown(f));
+}
 
 // shared/team.ts
 var MAX_WEEK = 53;
@@ -1336,20 +1456,22 @@ function createApp(options) {
   let streams = 0;
   async function api(req, res, url, engine2, base, replaySession) {
     const path = url.pathname.slice(base.length) || "/";
-    const pollCache = (seconds2) => options.transport === "poll" && !replaySession ? { "cache-control": `public, max-age=0, s-maxage=${seconds2}, stale-while-revalidate=${seconds2 * 3}` } : {};
+    const pollCache = (seconds2, unknown = false) => options.transport === "poll" && !replaySession ? { "cache-control": unknown ? "public, max-age=0, s-maxage=2" : `public, max-age=0, s-maxage=${seconds2}, stale-while-revalidate=${seconds2 * 3}` } : {};
     if (options.transport === "poll" && (path === "/interest" || path === "/stream")) {
       return send(res, 404, { error: "This deployment is polled; the live stream is not available" });
     }
     if (req.method === "GET" && path === "/slate") {
       const date = url.searchParams.get("date");
       const key = isDateKey(date) ? date : engine2.today();
-      return send(res, 200, await engine2.getSlate(key), pollCache(10));
+      const slate = await engine2.getSlate(key);
+      return send(res, 200, slate, pollCache(10, anyFeedUnknown(slate.freshness)));
     }
     const game = /^\/game\/([^/]+)$/.exec(path);
     if (req.method === "GET" && game) {
       const id = decodeURIComponent(game[1]);
       if (!parseGameId(id)) return send(res, 400, { error: "Invalid game id" });
-      return send(res, 200, await engine2.getDetail(id), pollCache(8));
+      const detail = await engine2.getDetail(id);
+      return send(res, 200, detail, pollCache(8, !detail.detail && feedUnknown(detail.freshness)));
     }
     const team = /^\/team\/([^/]+)$/.exec(path);
     if (req.method === "GET" && team) {
@@ -2583,6 +2705,89 @@ function normalizePredictor(raw, homeProviderId, awayProviderId) {
   const away = share(p.awayTeam, awayProviderId);
   return home !== null && away !== null ? { home, away, source: WIN_PROBABILITY_SOURCE } : null;
 }
+function coreTeamId(side) {
+  const ref = str(at(side, "team", "$ref"));
+  const m = ref ? /\/teams\/(\d+)(?:[/?]|$)/.exec(ref) : null;
+  return m ? m[1] : str(at(side, "team", "id")) ?? null;
+}
+var coreLine = (raw) => lineNumber(at(raw, "american") ?? at(raw, "value"));
+var corePrice = (raw) => parseAmerican(at(raw, "american") ?? at(raw, "alternateDisplayValue"));
+var coreNow = (o) => obj(o.current) ?? obj(o.close);
+function coreSpread(side) {
+  const price = (from) => {
+    const line = coreLine(at(from, "pointSpread"));
+    return line === null ? null : { line, odds: corePrice(at(from, "spread")) };
+  };
+  const o = obj(side);
+  return { open: price(o?.open), latest: price(o ? coreNow(o) : null) };
+}
+function coreMoneyline(side) {
+  const o = obj(side);
+  return { open: corePrice(at(o?.open, "moneyLine")), latest: corePrice(at(o ? coreNow(o) : null, "moneyLine")) };
+}
+function coreTotal(entry, which) {
+  const price = (from) => {
+    const line = coreLine(at(from, "total"));
+    return line === null ? null : { line, odds: corePrice(at(from, which)) };
+  };
+  return { open: price(entry.open), latest: price(coreNow(entry)) };
+}
+function normalizeCoreOdds(raw, homeProviderId, awayProviderId) {
+  const entries = arr(at(raw, "items") ?? raw).map(obj).filter((e2) => e2 !== null && obj(e2.provider) !== null);
+  const e = entries.find((x) => num(at(x, "provider", "priority")) === 1) ?? entries[0];
+  if (!e) return null;
+  const provider = str(at(e, "provider", "displayName")) ?? str(at(e, "provider", "name"));
+  if (!provider) return null;
+  const homeId = coreTeamId(e.homeTeamOdds);
+  const awayId = coreTeamId(e.awayTeamOdds);
+  const swapped = homeId === awayProviderId && awayId === homeProviderId;
+  if (!swapped && (homeId !== null && homeId !== homeProviderId || awayId !== null && awayId !== awayProviderId)) return null;
+  const H = swapped ? "awayTeamOdds" : "homeTeamOdds";
+  const A = swapped ? "homeTeamOdds" : "awayTeamOdds";
+  const spreadPairs = { home: coreSpread(e[H]), away: coreSpread(e[A]) };
+  const spread = reported(spreadPairs.home) || reported(spreadPairs.away) ? spreadPairs : null;
+  const moneylinePairs = { home: coreMoneyline(e[H]), away: coreMoneyline(e[A]) };
+  const moneyline = reported(moneylinePairs.home) || reported(moneylinePairs.away) ? moneylinePairs : null;
+  const totalPairs = { over: coreTotal(e, "over"), under: coreTotal(e, "under") };
+  const total = reported(totalPairs.over) || reported(totalPairs.under) ? totalPairs : null;
+  if (!spread && !moneyline && !total) return null;
+  const homeFavorite = bool(at(e, H, "favorite"));
+  const awayFavorite = bool(at(e, A, "favorite"));
+  const homeLine = spread?.home.latest?.line ?? null;
+  const favorite = homeFavorite === true && awayFavorite !== true ? "home" : awayFavorite === true && homeFavorite !== true ? "away" : homeLine !== null && homeLine !== 0 ? homeLine < 0 ? "home" : "away" : null;
+  return { provider, details: str(e.details), favorite, moneyline, spread, total };
+}
+function coreOddsUrl(league, providerEventId) {
+  const path = league === "nfl" ? "nfl" : "college-football";
+  const id = encodeURIComponent(providerEventId);
+  return `https://sports.core.api.espn.com/v2/sports/football/leagues/${path}/events/${id}/competitions/${id}/odds?limit=10`;
+}
+function preferLiveLines(fromSummary, fromCore) {
+  if (!fromCore) return fromSummary;
+  if (!fromSummary || fromSummary.provider !== fromCore.provider) return fromCore;
+  const pair = (core, summary) => ({
+    open: core.open ?? summary?.open ?? null,
+    latest: core.latest ?? summary?.latest ?? null
+  });
+  return {
+    ...fromCore,
+    details: fromCore.details ?? fromSummary.details,
+    favorite: fromCore.favorite ?? fromSummary.favorite,
+    moneyline: fromCore.moneyline ? { home: pair(fromCore.moneyline.home, fromSummary.moneyline?.home), away: pair(fromCore.moneyline.away, fromSummary.moneyline?.away) } : fromSummary.moneyline,
+    spread: fromCore.spread ? { home: pair(fromCore.spread.home, fromSummary.spread?.home), away: pair(fromCore.spread.away, fromSummary.spread?.away) } : fromSummary.spread,
+    total: fromCore.total ? { over: pair(fromCore.total.over, fromSummary.total?.over), under: pair(fromCore.total.under, fromSummary.total?.under) } : fromSummary.total
+  };
+}
+function normalizeWeather(raw) {
+  const w = obj(raw);
+  if (!w) return null;
+  const conditionId = num(w.conditionId) ?? (str(w.conditionId) !== null ? Number(str(w.conditionId)) : null);
+  const temperature = num(w.temperature) ?? num(w.highTemperature);
+  const displayValue = str(w.displayValue);
+  const id = conditionId !== null && Number.isFinite(conditionId) ? conditionId : null;
+  if (id === null && temperature === null && !displayValue) return null;
+  return { conditionId: id, temperature, displayValue };
+}
 
 // server/providers/espn/normalize.ts
 var PROVIDER_NAME = "ESPN";
@@ -2880,7 +3085,9 @@ function normalizeScoreboardEvent(raw, league, divisions, diagnostics = newDiagn
     status,
     situation,
     broadcasts: normalizeBroadcasts(comp),
-    venue: venue ? { name: str(venue.fullName), city: str(at(venue, "address", "city")), state: str(at(venue, "address", "state")) } : null,
+    venue: venue ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, "address", "city")), state: str(at(venue, "address", "state")), indoor: bool(venue.indoor), grass: bool(venue.grass) } : null,
+    // The weather at the venue, as reported. A roofed venue has none, which is the roof saying so.
+    weather: normalizeWeather(e.weather),
     neutralSite: bool(comp.neutralSite),
     conferenceGame: bool(comp.conferenceCompetition),
     links: { gamePage: gamePageLink(e.links) },
@@ -3245,14 +3452,16 @@ function normalizeSummary(json, league, divisions = league === "nfl" ? ["NFL"] :
       lastPlay: null
     } : null),
     broadcasts: normalizeBroadcasts(comp),
-    venue: venue ? { name: str(venue.fullName), city: str(at(venue, "address", "city")), state: str(at(venue, "address", "state")) } : null,
+    venue: venue ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, "address", "city")), state: str(at(venue, "address", "state")), indoor: bool(venue.indoor), grass: bool(venue.grass) } : null,
+    weather: normalizeWeather(at(root, "header", "weather") ?? root.weather),
     neutralSite: bool(comp.neutralSite),
     conferenceGame: bool(comp.conferenceCompetition),
     links: { gamePage: gamePageLink(header.links) },
     season: { year: num(at(header, "season", "year")), type: num(at(header, "season", "type")), week: num(header.week) },
     notes: [],
     coverage: {
-      level: pbpSource === "full" ? "full" : pbpSource === "none" ? "score-only" : "unknown",
+      // Before kickoff the summary marks play-by-play as unavailable even for fully covered games, so that is not a coverage level yet.
+      level: pbpSource === "full" ? "full" : pbpSource === "none" && status.kind !== "scheduled" ? "score-only" : "unknown",
       score: true,
       situation: situation !== null,
       playByPlay: playsWithTeams.length > 0,
@@ -3351,6 +3560,8 @@ var EspnProvider = class {
   coverage = /* @__PURE__ */ new Map();
   conferences = /* @__PURE__ */ new Map();
   seasons = /* @__PURE__ */ new Map();
+  /** A venue's roof and surface, asked for once per venue and kept for the life of the process. */
+  venues = /* @__PURE__ */ new Map();
   now;
   // ------------------------------------------------------------ slate
   async fetchSlate(league, dateKey, options) {
@@ -3501,11 +3712,35 @@ var EspnProvider = class {
     const league = parsedId.league;
     const path = league === "nfl" ? "nfl" : "college-football";
     const url = `https://site.api.espn.com/apis/site/v2/sports/football/${path}/summary?event=${encodeURIComponent(parsedId.providerEventId)}`;
-    const res = await this.fetcher.getJson(url);
+    const [res, odds] = await Promise.all([this.fetcher.getJson(url), this.fetcher.getJson(coreOddsUrl(league, parsedId.providerEventId))]);
     if (!res.ok) return { ok: false, error: { scope: "Game detail", message: res.error, status: res.status }, receivedAt: res.receivedAt };
     const detail = normalizeSummary(res.data, league, knownDivisions ?? (league === "nfl" ? ["NFL"] : []), this.diagnostics);
     if (!detail) return { ok: false, error: { scope: "Game detail", message: "Game summary did not have the expected shape", status: res.status }, receivedAt: res.receivedAt };
-    return { ok: true, detail, receivedAt: res.receivedAt };
+    const live = odds.ok ? normalizeCoreOdds(odds.data, detail.summary.home.providerId, detail.summary.away.providerId) : null;
+    const lines = preferLiveLines(detail.summary.lines ?? null, live);
+    const venue = await this.venueWith(league, detail.summary.venue);
+    const summary = { ...detail.summary, lines, ...venue ? { venue } : {} };
+    return { ok: true, detail: { ...detail, summary }, receivedAt: res.receivedAt };
+  }
+  /**
+   * A venue's roof and playing surface, asked for once and then remembered.
+   *
+   * A stadium does not change its surface between polls, so this is fetched the
+   * first time a game there is followed and never again. It is deliberately not
+   * fetched for a whole scoreboard: a college Saturday is sixty venues, and the
+   * surface only matters for a field somebody is actually looking at.
+   */
+  async venueWith(league, venue) {
+    if (!venue?.id) return venue;
+    if (!this.venues.has(venue.id)) {
+      const url = `https://sports.core.api.espn.com/v2/sports/football/leagues/${league === "nfl" ? "nfl" : "college-football"}/venues/${encodeURIComponent(venue.id)}`;
+      const res = await this.fetcher.getJson(url);
+      const doc = res.ok ? obj(res.data) : null;
+      this.venues.set(venue.id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null });
+    }
+    const known = this.venues.get(venue.id);
+    if (known.indoor === null && known.grass === null) return venue;
+    return { ...venue, indoor: venue.indoor ?? known.indoor, grass: venue.grass ?? known.grass };
   }
   // ------------------------------------------------------------ cache
   loadCoverageCache() {
@@ -6589,7 +6824,43 @@ function buildTimeline(league, event, summary, divisions) {
   const kickoffAt = scoreOnly ? scheduled : Math.min(...plays.map((p) => p.t));
   const endPlay = [...plays].reverse().find((p) => /end of game/i.test(p.raw.type?.text ?? ""));
   const endAt = scoreOnly ? Number.NEGATIVE_INFINITY : endPlay ? endPlay.t : Math.max(...plays.map((p) => p.t)) + 5 * 6e4;
-  return { id: `${league}-${event.id}`, league, providerEventId: String(event.id), divisions, event, summary, plays, kickoffAt, endAt, scoreOnly, edits: [], market: null };
+  return { id: `${league}-${event.id}`, league, providerEventId: String(event.id), divisions, event, summary, plays, kickoffAt, endAt, scoreOnly, edits: [], market: null, lines: null };
+}
+function lineAt(tl, tv) {
+  let found = null;
+  for (const point of tl.lines?.points ?? []) {
+    const at2 = Date.parse(point.at);
+    if (!Number.isFinite(at2)) continue;
+    if (at2 > tv) break;
+    found = point;
+  }
+  return found;
+}
+function linesAt(tl, tv) {
+  const now = lineAt(tl, tv);
+  if (!tl.lines || !now) return null;
+  const first = tl.lines.points[0];
+  const price = (line, odds) => line === null ? null : { line, odds };
+  const spread = now.spreadHome === null && now.spreadAway === null ? null : {
+    home: { open: price(first.spreadHome, first.spreadOddsHome), latest: price(now.spreadHome, now.spreadOddsHome) },
+    away: { open: price(first.spreadAway, first.spreadOddsAway), latest: price(now.spreadAway, now.spreadOddsAway) }
+  };
+  const moneyline = now.moneylineHome === null && now.moneylineAway === null ? null : { home: { open: first.moneylineHome, latest: now.moneylineHome }, away: { open: first.moneylineAway, latest: now.moneylineAway } };
+  const total = now.total === null ? null : {
+    over: { open: price(first.total, first.totalOddsOver), latest: price(now.total, now.totalOddsOver) },
+    under: { open: price(first.total, first.totalOddsUnder), latest: price(now.total, now.totalOddsUnder) }
+  };
+  if (!spread && !moneyline && !total) return null;
+  const homeLine = now.spreadHome;
+  return { provider: tl.lines.provider, details: null, favorite: homeLine !== null && homeLine !== 0 ? homeLine < 0 ? "home" : "away" : null, spread, moneyline, total };
+}
+function lineHistoryAt(tl, tv) {
+  if (!tl.lines) return null;
+  const points = tl.lines.points.filter((p) => {
+    const at2 = Date.parse(p.at);
+    return Number.isFinite(at2) && at2 <= tv;
+  });
+  return points.length ? { provider: tl.lines.provider, points, captured: true } : null;
 }
 function bookAt(contract, tv) {
   if (!contract) return null;
@@ -6833,6 +7104,10 @@ var FixtureStore = class {
   market(league, dateKey) {
     return this.json(join4("..", "kalshi", `${league}-${dateKey}.json`));
   }
+  /** Sportsbook lines recorded for one league and provider day, kept beside the ESPN fixtures in fixtures/lines. */
+  lines(league, dateKey) {
+    return this.json(join4("..", "lines", `${league}-${dateKey}.json`));
+  }
 };
 var finiteOrNull = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
 function capturedContract(raw) {
@@ -6856,6 +7131,40 @@ function withCapturedMarket(fx, tl) {
   const home = capturedContract(game.home);
   const away = capturedContract(game.away);
   if (home || away) tl.market = { source: typeof file?.source === "string" ? file.source : "Kalshi", event: String(game.event ?? ""), home, away };
+  return tl;
+}
+function capturedPoint(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw;
+  if (typeof r.at !== "string" || !Number.isFinite(Date.parse(r.at))) return null;
+  return {
+    at: r.at,
+    spreadHome: finiteOrNull(r.spreadHome),
+    spreadAway: finiteOrNull(r.spreadAway),
+    spreadOddsHome: finiteOrNull(r.spreadOddsHome),
+    spreadOddsAway: finiteOrNull(r.spreadOddsAway),
+    total: finiteOrNull(r.total),
+    totalOddsOver: finiteOrNull(r.totalOddsOver),
+    totalOddsUnder: finiteOrNull(r.totalOddsUnder),
+    moneylineHome: finiteOrNull(r.moneylineHome),
+    moneylineAway: finiteOrNull(r.moneylineAway)
+  };
+}
+function withCapturedLines(fx, tl) {
+  const scheduled = Date.parse(tl.event.date ?? tl.event.competitions?.[0]?.date);
+  if (!Number.isFinite(scheduled)) return tl;
+  let file;
+  try {
+    file = fx.lines(tl.league, easternDateKey(new Date(scheduled)));
+  } catch {
+    return tl;
+  }
+  const game = file?.games?.[tl.id];
+  const points = Array.isArray(game?.points) ? game.points.map(capturedPoint).filter((p) => p !== null) : [];
+  if (!points.length) return tl;
+  points.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const captured = { provider: typeof game?.provider === "string" ? game.provider : typeof file?.provider === "string" ? file.provider : "Sportsbook", points };
+  tl.lines = captured;
   return tl;
 }
 var MIN = 6e4;
@@ -7027,6 +7336,29 @@ var SCENARIOS = [
     }
   },
   {
+    id: "test-weather",
+    label: "Test scenario \xB7 Snow at the venue, at night (synthetic)",
+    description: "Built on a real game, with the provider's weather at the venue replaced by snow after dark on a grass field. The real game was played in the dry. Not real weather.",
+    synthetic: true,
+    speed: 6,
+    build(fx) {
+      const tl = singleGame(fx, BASE_GAME.league, BASE_GAME.id, BASE_GAME.rel, ["NFL"]);
+      if (!tl) return null;
+      tl.event = { ...tl.event, weather: { conditionId: 44, temperature: 24, displayValue: "Snow" } };
+      const comp = tl.event.competitions[0];
+      tl.event.competitions = [{ ...comp, venue: { ...comp.venue, indoor: false, grass: true } }];
+      const k = Math.max(0, Math.floor(tl.plays.length * 0.3));
+      return {
+        date: "20260913",
+        games: [tl],
+        startAt: tl.plays[k].t - 2 * MIN,
+        endAt: tl.plays[Math.min(tl.plays.length - 1, k + 40)].t + 4 * MIN,
+        limitations: ["Synthetic test scenario: the provider reported no snow at this game."],
+        outages: []
+      };
+    }
+  },
+  {
     id: "test-provider-outage",
     label: "Test scenario \xB7 Provider outage and recovery (synthetic)",
     description: "Built on real games. The provider stops answering for two minutes of replay time, then recovers. Not a real outage.",
@@ -7180,7 +7512,9 @@ var ReplayProvider = class {
       const summary = normalizeScoreboardEvent(scoreboardEventAt(g, tv), league, league === "nfl" ? ["NFL"] : g.divisions.filter((d) => options.divisions.includes(d)), this.diagnostics);
       const laterals = summary ? lateralsFor(g) : null;
       const decorated = summary && laterals ? summaryWithLateral(summary, laterals, latestPlayId(g, tv)) : summary;
-      return decorated && g.market ? { ...decorated, market: marketAt(g, tv) } : decorated;
+      if (!decorated) return decorated;
+      const lines = g.lines ? linesAt(g, tv) : null;
+      return g.market || lines ? { ...decorated, ...g.market ? { market: marketAt(g, tv) } : {}, ...lines ? { lines } : {} } : decorated;
     }).filter((g) => g !== null);
     const divisions = league === "nfl" ? [{ division: "NFL", label: "NFL", providerGroupId: null, games: games.length, health: "connected" }] : options.divisions.map((d) => ({ division: d, label: d, providerGroupId: null, games: games.filter((g) => g.divisions.includes(d)).length, health: "connected" }));
     return { league, dateKey, games, divisions, errors: [], failed: false, receivedAt, discovery: "Replay lab: captured games only.", limitations: this.scenario.limitations };
@@ -7195,8 +7529,19 @@ var ReplayProvider = class {
     if (!detail) return { ok: false, error: { scope: "Game detail", message: "Replay summary could not be read", status: null }, receivedAt };
     const laterals = lateralsFor(tl);
     const decorated = laterals ? detailWithLateral(detail, laterals) : detail;
-    if (!tl.market) return { ok: true, detail: decorated, receivedAt };
-    return { ok: true, detail: { ...decorated, summary: { ...decorated.summary, market: marketAt(tl, tv) }, marketHistory: marketHistoryAt(tl, tv) }, receivedAt };
+    const lines = tl.lines ? linesAt(tl, tv) : null;
+    if (!tl.market && !lines) return { ok: true, detail: decorated, receivedAt };
+    return {
+      ok: true,
+      detail: {
+        ...decorated,
+        summary: { ...decorated.summary, ...tl.market ? { market: marketAt(tl, tv) } : {}, ...lines ? { lines } : {} },
+        ...tl.market ? { marketHistory: marketHistoryAt(tl, tv) } : {},
+        // The record the page rewinds, cut at the replay clock, so a replay stops where a live session would have.
+        lineHistory: lineHistoryAt(tl, tv)
+      },
+      receivedAt
+    };
   }
 };
 var ReplayLab = class {
@@ -7239,7 +7584,11 @@ var ReplayLab = class {
       built = null;
     }
     if (!built) return { error: "This scenario\u2019s captured data is not installed" };
-    if (!def.synthetic) for (const tl of built.games) withCapturedMarket(this.fixtures, tl);
+    if (!def.synthetic)
+      for (const tl of built.games) {
+        withCapturedMarket(this.fixtures, tl);
+        withCapturedLines(this.fixtures, tl);
+      }
     this.sweep();
     const transient = [...this.sessions.values()].filter((s) => !s.persistent).length;
     if (!opts.persistent && transient >= this.options.maxSessions) return { error: "Too many replay sessions are running; try again shortly" };
@@ -7649,7 +7998,7 @@ var TeamService = class {
 };
 
 // shared/version.ts
-var VERSION = "0.5.0";
+var VERSION = "0.6.0";
 
 // server/index.ts
 var ROOT = resolve3(dirname4(fileURLToPath(import.meta.url)), "..");
