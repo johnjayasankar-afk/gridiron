@@ -26,6 +26,8 @@
 }
 
 :root {
+  /* A native range thumb, which the replay scrubber's score marks are inset by so they line up with it. */
+  --rp-thumb: 16px;
   --ground: #f8f6f1;
   --ground-2: #f1efe9;
   --paper: #ffffff;

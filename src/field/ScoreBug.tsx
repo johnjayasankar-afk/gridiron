@@ -19,20 +19,27 @@
  */
 import { memo } from 'react';
 import { periodShort } from '../../shared/util';
+import { statusShort } from '../../shared/format';
 import type { GameSummary, Side, Situation } from '../../shared/model';
-import { isLiveOrPaused } from '../../shared/model';
 import { accentFor } from './color';
+import { useScoreRoll } from '../components/Score';
 
 /** How many timeouts a side starts a half with, which is what the pips are drawn against. */
 const TIMEOUTS = 3;
 
 function Team({ game, side, score, hasBall, timeouts }: { game: GameSummary; side: Side; score: number | null; hasBall: boolean; timeouts: number | null }) {
   const team = game[side];
+  // The same roll the scoreboard's numbers use, so scrubbing moves both together.
+  const roll = useScoreRoll(score);
   return (
     <div className={`bug-team${hasBall ? ' has-ball' : ''}`}>
       <span className="bug-bar" style={{ background: accentFor(team.color, true) }} aria-hidden="true" />
       <span className="bug-abbr">{team.abbreviation}</span>
-      <span className="bug-score mono">{score ?? '-'}</span>
+      <span className={`bug-score mono${roll ? ` roll-${roll}` : ''}`}>
+        <span key={score ?? 'none'} className="score-num">
+          {score ?? '-'}
+        </span>
+      </span>
       {/* Three pips, unlit as they are spent. Nothing is drawn at all where the provider reported no count. */}
       {timeouts !== null && (
         <span className="bug-timeouts">
@@ -45,10 +52,24 @@ function Team({ game, side, score, hasBall, timeouts }: { game: GameSummary; sid
   );
 }
 
-export const ScoreBug = memo(function ScoreBug({ game, situation, frame }: { game: GameSummary; situation: Situation | null; frame: { period: number | null; clock: string | null } | null }) {
-  const live = isLiveOrPaused(game.status.kind);
-  const period = frame ? frame.period : game.status.period;
-  const clock = frame ? frame.clock : game.status.clock;
+export const ScoreBug = memo(function ScoreBug({ game, situation }: { game: GameSummary; situation: Situation | null }) {
+  /*
+   * Nothing before kickoff. A broadcast does not put a bug up over a game that
+   * has not started, and there is nothing for it to say: it read "IOWA - MICH -"
+   * beside an empty clock, which is two dashes and a box. The field already
+   * carries the kickoff time for a scheduled game, which is the answer to the
+   * only question there is.
+   */
+  if (game.status.kind === 'scheduled') return null;
+  /*
+   * Straight off the game, because the game handed in is already the game as it
+   * stood at the play being looked at (shared/replayFrames, gameAtFrame). The
+   * bug used to take the period and the clock separately and read the score off
+   * a game that had moved on, which is how it came to show a final score beside
+   * a first quarter clock.
+   */
+  const period = game.status.period;
+  const clock = game.status.clock;
   const possession = situation?.possession ?? null;
   /*
    * The provider's own words for the down where it gave them, because "3rd & 7"
@@ -65,9 +86,21 @@ export const ScoreBug = memo(function ScoreBug({ game, situation, frame }: { gam
         <Team game={game} side="away" score={game.score.away} hasBall={possession === 'away'} timeouts={situation?.timeouts.away ?? null} />
         <Team game={game} side="home" score={game.score.home} hasBall={possession === 'home'} timeouts={situation?.timeouts.home ?? null} />
       </div>
+      {/*
+        A running clock only while the clock is running. Everything else is the
+        state in a word, from the same place the status pill takes it: the bug
+        said "Q4" and nothing else on a finished game, because the period was all
+        it read, and a broadcast bug on a finished game says FINAL.
+      */}
       <div className="bug-clock">
-        <span className="bug-period mono">{periodShort(period, game.status.regulationPeriods) ?? (live ? 'LIVE' : '')}</span>
-        {clock && <span className="bug-time mono">{clock}</span>}
+        {game.status.kind === 'in_progress' ? (
+          <>
+            <span className="bug-period mono">{periodShort(period, game.status.regulationPeriods) ?? 'LIVE'}</span>
+            {clock && <span className="bug-time mono">{clock}</span>}
+          </>
+        ) : (
+          <span className="bug-state mono">{statusShort(game.status).toUpperCase()}</span>
+        )}
       </div>
       {/*
         The red zone is worth its own row even when the provider gave no down

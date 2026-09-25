@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { bowlFor } from '../shared/bowl';
-import { VENUE_CAPACITIES } from '../shared/venues';
+import { VENUES } from '../shared/venues';
 
 describe('the bowl a capacity buys', () => {
   it('is exactly the one Gridiron has always drawn when no capacity is reported', () => {
@@ -29,8 +29,14 @@ describe('the bowl a capacity buys', () => {
     expect(big.tiers[0].rows).toBeGreaterThan(mid.tiers[0].rows);
     expect(mid.tiers[0].rows).toBeGreaterThan(small.tiers[0].rows);
     expect(big.tiers[0].length).toBeGreaterThan(small.tiers[0].length);
-    expect(big.seats).toBeGreaterThan(mid.seats);
-    expect(mid.seats).toBeGreaterThan(small.seats);
+    /*
+     * And the crowd with it. Seat lights are scattered per row along each
+     * stand's length, so rows times length is what the bowl actually holds;
+     * there is no separate count to keep in step with it.
+     */
+    const holds = (b: ReturnType<typeof bowlFor>) => b.tiers.reduce((n, t) => n + t.rows * t.length, 0);
+    expect(holds(big)).toBeGreaterThan(holds(mid));
+    expect(holds(mid)).toBeGreaterThan(holds(small));
   });
 
   it('takes the ends off a ground too small to have them, which is what those grounds look like', () => {
@@ -55,28 +61,41 @@ describe('the bowl a capacity buys', () => {
 });
 
 describe('the checked-in capacity table', () => {
-  const table = { venues: VENUE_CAPACITIES };
+  const table = { venues: VENUES };
 
-  it('every row cites the entry it came from, so any one of them can be checked', () => {
+  it('cites an entry for every capacity, and claims none without one', () => {
     expect(table.venues.length).toBeGreaterThan(100);
     for (const v of table.venues) {
-      expect(v.wikidata, v.name).toMatch(/^Q\d+$/);
       expect(v.espnId, v.name).toMatch(/^\d+$/);
-      expect(v.capacity, v.name).toBeGreaterThan(0);
+      // The two travel together: a capacity always says where it came from, and a row without
+      // one never carries an orphaned reference to an entry it did not use.
+      if (v.capacity === null) expect(v.wikidata, v.name).toBeNull();
+      else {
+        expect(v.wikidata, v.name).toMatch(/^Q\d+$/);
+        expect(v.capacity, v.name).toBeGreaterThan(0);
+      }
     }
   });
 
-  it('holds one row per venue, so a lookup can never be ambiguous', () => {
+  it('carries a surface for every venue, which is the thing the scoreboard never says', () => {
+    const withSurface = table.venues.filter((v) => v.grass !== null);
+    expect(withSurface.length).toBe(table.venues.length);
+  });
+
+  it('holds one row per venue, so a lookup by id can never be ambiguous', () => {
     const ids = table.venues.map((v) => v.espnId);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('holds one row per name too, which is what makes the name fallback safe', () => {
-    // Captured scoreboards from before the provider published venue ids name their venues and
-    // identify them with nothing, so the name is matched instead. That is only exact while no
-    // two venues in the table share one.
-    const names = table.venues.map((v) => v.name);
-    expect(new Set(names).size).toBe(names.length);
+  it('has names that repeat, which is exactly why the name fallback drops them', () => {
+    // Two different grounds are both called "Greene Stadium". A fallback that picked one would
+    // put another venue's facts on a game, so a name that is not unique is not matchable at all.
+    const counts = new Map<string, number>();
+    for (const v of table.venues) counts.set(v.name, (counts.get(v.name) ?? 0) + 1);
+    const repeated = [...counts.entries()].filter(([, n]) => n > 1);
+    expect(repeated.length).toBeGreaterThan(0);
+    const unique = [...counts.entries()].filter(([, n]) => n === 1);
+    expect(unique.length).toBeGreaterThan(table.venues.length * 0.9);
   });
 
   it('has the ones anybody would check by hand', () => {

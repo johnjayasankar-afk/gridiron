@@ -6,12 +6,14 @@
  */
 import { ArrowLeft, Bell, BellOff, ChevronLeft, ChevronRight, Clapperboard, Copy, Crosshair, Minus, Pause, PictureInPicture2, Pin, PinOff, Play, Plus, RotateCcw, Share2, SkipBack, SkipForward, Square, StepBack, StepForward } from 'lucide-react';
 import { openPopout, popoutSupported } from '../components/Popout';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { scoreText, statusShort, teamFor } from '../../shared/format';
+import { accentFor } from '../field/color';
+import { useIsDark } from '../lib/theme';
 import type { GameDetail, GameSummary } from '../../shared/model';
 import { ADMIN_KINDS, isLiveOrPaused, parseGameId } from '../../shared/model';
 import { planPlayAnimation, playInputFromEvent } from '../../shared/playAnimation';
-import { catchUp, currentDriveId, firstOrderOfDrive, frameAt, inspectablePlays, scoringOrders, stepOrder } from '../../shared/replayFrames';
+import { catchUp, currentDriveId, firstOrderOfDrive, frameAt, gameAtFrame, inspectablePlays, scoringOrders, stepOrder } from '../../shared/replayFrames';
 import { periodShort } from '../../shared/util';
 import { navigate, setParams, useLocation } from '../app/router';
 import { IconButton, Segmented } from '../components/controls';
@@ -172,6 +174,37 @@ function ReplayControls({ detail, game, inspection, onInspect, newPlays }: { det
   // The reel always runs the whole game's scores, from the first, whatever is
   // on screen when it starts.
   const reelAt = inspection.reel && order !== null ? scoring.indexOf(order) : -1;
+
+  const dark = useIsDark();
+  const marks = useMemo(() => {
+    const last = plays.length - 1;
+    if (last < 1) return [];
+    return scoring.flatMap((o) => {
+      const at = plays.findIndex((p) => p.order === o);
+      if (at < 0) return [];
+      const p = detail.plays.find((x) => x.order === o);
+      const team = p ? teamFor(game, p.scoringTeam ?? p.offense) : null;
+      return [{ order: o, at: at / last, color: accentFor(team?.color ?? null, dark) }];
+    });
+  }, [scoring, plays, detail, game, dark]);
+
+  /*
+   * Where a period starts, so the bar reads as a game rather than as a run of
+   * plays. Taken from where the period the provider reports actually changes,
+   * not from quarters of the length: a game's plays are not spread evenly
+   * across it, and overtime gets a division of its own for the same reason.
+   */
+  const periods = useMemo(() => {
+    const last = plays.length - 1;
+    if (last < 1) return [];
+    const out: Array<{ period: number; at: number }> = [];
+    for (let i = 1; i <= last; i++) {
+      const before = plays[i - 1].period;
+      const now = plays[i].period;
+      if (now !== null && before !== null && now > before) out.push({ period: now, at: i / last });
+    }
+    return out;
+  }, [plays]);
   const toggleReel = () => {
     if (inspection.reel) return patch({ reel: false });
     if (scoring.length) onInspect(scoring[0], { reel: true, driveId: null });
@@ -215,8 +248,25 @@ function ReplayControls({ detail, game, inspection, onInspect, newPlays }: { det
           )}
         </div>
       </div>
-      <label className="rp-scrub">
+      <label className="rp-scrub" style={{ '--at': plays.length > 1 ? Math.max(0, index) / (plays.length - 1) : 0 } as CSSProperties}>
         <span className="sr-only">Scrub through plays</span>
+        {/*
+          Where the points landed, on the track you drag. The ticks are inset by
+          half a thumb at each end because that is the travel a range input
+          actually has, so a tick sits under the thumb when you land on it.
+          A drive's own track only marks the scores inside that drive, because
+          the others are not on it to scrub to.
+        */}
+        {(marks.length > 0 || periods.length > 0) && (
+          <span className="rp-marks" aria-hidden="true">
+            {periods.map((q) => (
+              <span key={`p${q.period}`} className="rp-period" style={{ left: `${q.at * 100}%` }} />
+            ))}
+            {marks.map((m) => (
+              <span key={m.order} className="rp-mark" style={{ left: `${m.at * 100}%`, background: m.color }} />
+            ))}
+          </span>
+        )}
         <input
           type="range"
           min={0}
@@ -506,6 +556,13 @@ export function DetailView({ id }: { id: string }) {
   const live = isLiveOrPaused(game.status.kind);
   const stale = staleGames(world, connectionDown).has(id);
   const fieldSituation = frame ? frame.situation : liveSituation.situation;
+  /*
+   * The game as it stood at the play being looked at, which is what the
+   * scoreboard and the scorebug read. Everything else on the page keeps the real
+   * game: the title, the links, the venue and the navigation are facts about the
+   * fixture rather than about a moment in it.
+   */
+  const shownGame = useMemo(() => gameAtFrame(game!, frame), [game, frame]);
   const hasSpot = !!fieldSituation && fieldSituation.spot.schematicYard !== null && (frame !== null || live);
   const message = frame ? (hasSpot ? null : 'Ball spot unavailable for this play') : fieldMessage(game, hasSpot);
 
@@ -566,7 +623,8 @@ export function DetailView({ id }: { id: string }) {
           swipe.current = null;
         }}
       >
-        <Scoreboard game={game} situation={liveSituation.situation} />
+        {/* As of the play being looked at, so the score, the clock and the period are one moment and not three. */}
+        <Scoreboard game={shownGame} situation={shownGame.situation} historical={!!frame} />
       </div>
       {stale && (
         <section className="banner banner-attention" role="status">
@@ -602,27 +660,42 @@ export function DetailView({ id }: { id: string }) {
               />
             )}
             {message && <span className="field-message">{message}</span>}
-            <span className="field-tags" aria-hidden="true">
-              {frame && <span className="field-tag tag-history">Historical view</span>}
-              {!frame && liveSituation.lastKnown && hasSpot && <span className="field-tag">Last known spot</span>}
-            </span>
             {label && (
               <span key={labelKey} className={`field-label${!frame && liveMoment.corrected ? ' is-correction' : ''}`} aria-hidden="true">
                 {label}
               </span>
             )}
             {/*
+              The bug and the tags share one corner and are stacked in flow
+              rather than each anchored to it. Both were pinned to the bottom
+              left independently and landed on top of each other, and since the
+              bug changes height with whether a down was reported, nudging one of
+              them by a fixed amount would only have moved the collision. In a
+              column they cannot overlap at any height.
+
               The bug belongs to the field, so the field answers the question on
               its own: on the wall, in a pop-out, or simply scrolled past the
               scoreboard. It reads the play being looked at when one is, like
               everything else on this page.
             */}
-            <ScoreBug game={game} situation={fieldSituation} frame={frame ? { period: frame.play.period, clock: frame.play.clock } : null} />
-            <span className="field-orientation mono" aria-hidden="true">
-              Schematic · {game.away.abbreviation} defends left
-              {/* The sky the field is lit by, in the provider's own words, so the light is attributable and not a mood. */}
-              {skyCaption && <span className="field-sky"> · {skyCaption}</span>}
-            </span>
+            <div className="field-corner">
+              <span className="field-tags" aria-hidden="true">
+                {frame && <span className="field-tag tag-history">Historical view</span>}
+                {!frame && liveSituation.lastKnown && hasSpot && <span className="field-tag">Last known spot</span>}
+              </span>
+              <ScoreBug game={shownGame} situation={fieldSituation} />
+              {/*
+                In the corner's column rather than positioned on its own against
+                the bottom of the field. Two stacks that each measured from the
+                bottom edge met exactly once the bug was between them, leaving a
+                pixel between the two and reading as one block.
+              */}
+              <span className="field-orientation mono" aria-hidden="true">
+                Schematic · {game.away.abbreviation} defends left
+                {/* The sky the field is lit by, in the provider's own words, so the light is attributable and not a mood. */}
+                {skyCaption && <span className="field-sky"> · {skyCaption}</span>}
+              </span>
+            </div>
             {fieldMode === '3d' && (
               <span className="field-hint" aria-hidden="true">
                 {zoomEnabled ? 'Drag to orbit · scroll to zoom' : 'Drag to orbit · click, then scroll to zoom'}
@@ -636,7 +709,7 @@ export function DetailView({ id }: { id: string }) {
           <OddsPanel game={game} detail={detail} frame={frame} replay={world.mode === 'replay'} />
           {detail && game.status.kind !== 'scheduled' && <DriveChart track={drive} game={game} situation={liveSituation.situation} frame={frame} onSelectPlay={(order, driveId) => inspect(order, { driveId })} />}
           {summary && plays.length > 0 && <CatchUpPanel summary={summary} sinceLabel={since === null ? 'Key moments' : 'Since your last visit'} onSelect={(o) => selectPlay(o)} />}
-          {detail && <LeadersPanel detail={detail} game={game} />}
+          {detail && <LeadersPanel detail={detail} game={game} historical={!!frame} />}
         </aside>
 
         {detail && <GameFlowChart game={game} detail={detail} selectedOrder={inspection?.order ?? null} onSelectPlay={selectFromFlow} />}
@@ -659,7 +732,7 @@ export function DetailView({ id }: { id: string }) {
               <DetailPending entry={entry} game={game} />
             ))}
           {tab === 'scoring' && (detail ? <ScoringTimeline detail={detail} game={game} onSelectPlay={(o) => selectPlay(o)} /> : <DetailPending entry={entry} game={game} />)}
-          {tab === 'stats' && (detail ? <StatsTable detail={detail} game={game} /> : <DetailPending entry={entry} game={game} />)}
+          {tab === 'stats' && (detail ? <StatsTable detail={detail} game={game} historical={!!frame} /> : <DetailPending entry={entry} game={game} />)}
           {tab === 'info' && <GameInfo game={game} detail={detail} />}
         </Tabs>
       </div>

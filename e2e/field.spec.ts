@@ -435,25 +435,31 @@ test.describe('the sky over the field', () => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.setViewportSize({ width: 1440, height: 900 });
-    const draws = async () => {
+    /*
+     * The bowl reports what it drew. Counting draw calls across two scenarios
+     * was the first attempt and was never a measurement of the roof: the two
+     * scenarios sit at different plays, so the scenes differ by a ball, a drive
+     * and whatever else is on the field, and the assertion passed on those
+     * rather than on a roof. What the roof costs was measured separately, by
+     * turning it off on one identical scene.
+     */
+    const roofDrawn = async () => {
       await expect.poll(() => page.evaluate(() => !!window.__gridironField), { timeout: 20_000 }).toBe(true);
       await expect.poll(async () => (await page.evaluate(() => window.__gridironGraphics?.info()))?.calls ?? 0, { timeout: 15_000 }).toBeGreaterThan(20);
-      return (await page.evaluate(() => window.__gridironGraphics?.info()))!.calls;
+      // The venue's roof arrives with the game rather than with the first frame, so this is polled.
+      return page.evaluate(() => window.__gridironField!().roof);
     };
 
     await openReplay(page, { path: '/game/nfl-401872925', scenario: 'test-indoors', at: 0.4 });
-    const roofed = await draws();
-    expect(await page.evaluate(() => window.__gridironField!().sky!.indoor)).toBe(true);
+    await expect.poll(roofDrawn, { timeout: 20_000 }).toBe(true);
     // Nothing falls indoors, and the field says so in words a screen reader gets.
     expect(await page.evaluate(() => window.__gridironField!().sky!.drops)).toBe(0);
     await expect(page.locator('.sit-note')).toContainText('The venue has a roof');
 
+    // And the same game under the sky is given none.
     await openReplay(page, { path: '/game/nfl-401872925', scenario: 'nfl-week1-sunday', at: 0.4 });
-    const open = await draws();
+    await expect.poll(roofDrawn, { timeout: 20_000 }).toBe(false);
     expect(await page.evaluate(() => window.__gridironField!().sky)).toBeNull();
-
-    // The deck, its ribs and the membrane over the field: three more draws than the same game under the sky.
-    expect(roofed - open, 'the roof was not drawn').toBeGreaterThanOrEqual(3);
     expect(errors, 'drawing the roof logged an error').toEqual([]);
   });
 
@@ -470,10 +476,40 @@ test.describe('the sky over the field', () => {
     /*
      * It sits above the shared canvas. Below it the field draws over the bug and
      * the whole thing vanishes, which is exactly what happened the first time.
+     * The number is on the corner that positions the bug rather than on the bug,
+     * so this reads the first one an ancestor actually gives it: asking the bug
+     * alone got `auto`, which compares as NaN and quietly answers nothing.
      */
-    const overlay = await bug.evaluate((el) => Number(getComputedStyle(el).zIndex));
+    const overlay = await bug.evaluate((el) => {
+      for (let n: HTMLElement | null = el as HTMLElement; n; n = n.parentElement) {
+        const z = Number(getComputedStyle(n).zIndex);
+        if (!Number.isNaN(z)) return z;
+      }
+      return NaN;
+    });
     const canvas = await page.locator('canvas').first().evaluate((el) => Number(getComputedStyle(el).zIndex) || 0);
     expect(overlay).toBeGreaterThan(canvas);
+  });
+
+  test('the scorebug says what state a game is in when there is no clock to run', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openReplay(page, { path: '/game/nfl-401872925', scenario: 'nfl-week1-sunday', at: 0.99 });
+    const bug = page.locator('.score-bug');
+    await expect(bug).toBeVisible();
+    /*
+     * It read the period and nothing else, so a finished game got "Q4" beside
+     * two final scores and no clock. The state comes from the same place the
+     * status pill takes it now, so the two cannot disagree.
+     */
+    await expect(bug.locator('.bug-state')).toHaveText('FINAL');
+    await expect(bug.locator('.bug-time')).toHaveCount(0);
+    await expect(page.locator('.scoreboard')).toContainText('Final');
+
+    // And a play from inside that game is given its clock back, because then there is one.
+    await page.getByRole('button', { name: 'First play of the game' }).click();
+    await expect(page.locator('.situation-panel')).toContainText('Historical view');
+    await expect(bug.locator('.bug-state')).toHaveCount(0);
+    await expect(bug.locator('.bug-time')).toHaveText('15:00');
   });
 
   test('a game the provider reported no weather for is lit exactly as it always was', async ({ page }) => {

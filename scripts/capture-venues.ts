@@ -24,7 +24,7 @@
  * The output is checked in. Nothing queries Wikidata at runtime: this is a
  * reference table, generated deliberately and reviewed like any other file.
  *
- *   npx tsx scripts/capture-venues.ts            every team in both leagues
+ *   npx tsx scripts/capture-venues.ts            every venue in both leagues
  *   npx tsx scripts/capture-venues.ts --nfl      NFL only, which is quick
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -44,6 +44,9 @@ interface Venue {
   name: string;
   city: string | null;
   state: string | null;
+  /** The provider's own flags, which its scoreboard does not carry even though its venue documents do. */
+  grass: boolean | null;
+  indoor: boolean | null;
 }
 
 /** Runs a list of jobs a few at a time, because a thousand at once is rude and slower. */
@@ -62,27 +65,44 @@ async function pool<T, R>(items: T[], size: number, run: (item: T) => Promise<R>
   return out;
 }
 
-/** Every venue a current team calls home, which is every venue that hosts a game worth drawing. */
-async function venuesFromTeams(): Promise<Venue[]> {
+/**
+ * Every venue the provider publishes, from its own venues collection.
+ *
+ * Not the venues current teams call home, which was the first attempt and was
+ * wrong: the provider's team documents are stale. They place the Chargers at
+ * Dignity Health Sports Park and the Rams at the Coliseum, homes both teams left
+ * years ago, so SoFi Stadium was missing from the table entirely while two
+ * grounds nobody plays in were in it. The collection is an enumeration rather
+ * than an inference, so it has all of them and does not depend on a roster being
+ * up to date.
+ */
+async function allVenues(): Promise<Venue[]> {
   const leagues = nflOnly ? ['nfl'] : ['nfl', 'college-football'];
   const refs: string[] = [];
   for (const league of leagues) {
     for (let page = 1; ; page++) {
-      const res = await fetcher.getJson<Raw>(`${CORE}/${league}/seasons/2026/teams?limit=400&page=${page}`);
+      const res = await fetcher.getJson<Raw>(`${CORE}/${league}/venues?limit=1000&page=${page}`);
       if (!res.ok) break;
       for (const item of (res.data.items ?? []) as Raw[]) if (typeof item.$ref === 'string') refs.push(item.$ref);
       if (page >= Number(res.data.pageCount ?? 1)) break;
     }
   }
-  console.log(`${refs.length} teams to read`);
+  console.log(`${refs.length} venue documents to read`);
   const found = new Map<string, Venue>();
   let done = 0;
   await pool(refs, 8, async (ref) => {
     const res = await fetcher.getJson<Raw>(ref.replace('http://', 'https://'));
-    if (++done % 100 === 0) console.log(`  ${done}/${refs.length}`);
-    const v = res.ok ? (res.data.venue as Raw | undefined) : undefined;
+    if (++done % 200 === 0) console.log(`  ${done}/${refs.length}`);
+    const v = res.ok ? (res.data as Raw) : null;
     if (!v?.id || typeof v.fullName !== 'string') return;
-    found.set(String(v.id), { espnId: String(v.id), name: v.fullName, city: v.address?.city ?? null, state: v.address?.state ?? null });
+    found.set(String(v.id), {
+      espnId: String(v.id),
+      name: v.fullName,
+      city: v.address?.city ?? null,
+      state: v.address?.state ?? null,
+      grass: typeof v.grass === 'boolean' ? v.grass : null,
+      indoor: typeof v.indoor === 'boolean' ? v.indoor : null,
+    });
   });
   return [...found.values()].sort((a, b) => Number(a.espnId) - Number(b.espnId));
 }
@@ -136,11 +156,11 @@ async function wikidata(names: string[]): Promise<Map<string, Candidate[]>> {
 }
 
 async function main() {
-  const venues = await venuesFromTeams();
+  const venues = await allVenues();
   console.log(`${venues.length} distinct venues`);
   const candidates = await wikidata([...new Set(venues.map((v) => plainName(v.name)))]);
 
-  const rows: Array<{ espnId: string; name: string; city: string | null; capacity: number; wikidata: string }> = [];
+  const rows: Array<{ espnId: string; name: string; capacity: number | null; wikidata: string | null; grass: boolean | null; indoor: boolean | null }> = [];
   const dropped: string[] = [];
   for (const v of venues) {
     const all = candidates.get(plainName(v.name)) ?? [];
@@ -149,8 +169,18 @@ async function main() {
     const american = distinct.filter((c) => c.country === 'United States' && c.capacity && c.capacity > 0);
     const here = v.city ? american.filter((c) => c.admin.has(v.city!)) : [];
     const pick = here.length ? here : american;
-    if (pick.length === 1) rows.push({ espnId: v.espnId, name: v.name, city: v.city, capacity: pick[0].capacity!, wikidata: pick[0].qid });
-    else dropped.push(`${v.name}${v.city ? `, ${v.city}` : ''}${pick.length > 1 ? ` (${pick.length} entries, not decided)` : ''}`);
+    const matched = pick.length === 1 ? pick[0] : null;
+    if (!matched) dropped.push(`${v.name}${v.city ? `, ${v.city}` : ''}${pick.length > 1 ? ` (${pick.length} entries, not decided)` : ''}`);
+    /*
+     * A row is worth keeping for the surface alone. The provider publishes the
+     * surface on a venue's own document and not on its scoreboard, so without
+     * this every card on a college Saturday draws mowing stripes whether the
+     * ground has grass or not. Capacity may be null on such a row; the two facts
+     * come from different places and neither waits for the other.
+     */
+    if (matched || v.grass !== null || v.indoor !== null) {
+      rows.push({ espnId: v.espnId, name: v.name, capacity: matched?.capacity ?? null, wikidata: matched?.qid ?? null, grass: v.grass, indoor: v.indoor });
+    }
   }
 
   mkdirSync(dirname(OUT), { recursive: true });
@@ -176,20 +206,30 @@ async function main() {
     ' * back to the size Gridiron has always drawn.',
     ' *',
     ' * Source: Wikidata (CC0), matched to the provider\'s venue ids by name, country and city.',
-    ` * Generated ${new Date().toISOString().slice(0, 10)} from ${rows.length} unarguable matches.`,
+    ` * Capacity comes from Wikidata; the surface and the roof are the provider's own,`,
+    ' * read from its venue documents, which its scoreboard does not carry. The two',
+    ' * are independent: a row may have one and not the other.',
+    ' *',
+    ` * Generated ${new Date().toISOString().slice(0, 10)}: ${rows.length} venues, ${rows.filter((r) => r.capacity !== null).length} with a capacity.`,
     ' */',
-    'export interface VenueCapacity {',
+    'export interface VenueRecord {',
     "  /** The provider's venue id, which is what a game is matched on. */",
     '  espnId: string;',
     '  name: string;',
-    '  capacity: number;',
-    '  /** The entry this came from, so any row can be checked. */',
-    '  wikidata: string;',
+    '  /** From Wikidata, and null where no entry could be matched beyond argument. */',
+    '  capacity: number | null;',
+    '  /** The entry the capacity came from, so any row can be checked. */',
+    '  wikidata: string | null;',
+    "  /** The provider's own flags, from its venue documents, which its scoreboard does not carry. */",
+    '  grass: boolean | null;',
+    '  indoor: boolean | null;',
     '}',
     '',
-    'export const VENUE_CAPACITIES: readonly VenueCapacity[] = [',
+    'export const VENUES: readonly VenueRecord[] = [',
   ];
-  const body = rows.sort((a, b) => Number(a.espnId) - Number(b.espnId)).map((r) => `  { espnId: '${r.espnId}', name: '${escape(r.name)}', capacity: ${r.capacity}, wikidata: '${r.wikidata}' },`);
+  const body = rows
+    .sort((a, b) => Number(a.espnId) - Number(b.espnId))
+    .map((r) => `  { espnId: '${r.espnId}', name: '${escape(r.name)}', capacity: ${r.capacity === null ? 'null' : r.capacity}, wikidata: ${r.wikidata === null ? 'null' : `'${r.wikidata}'`}, grass: ${r.grass === null ? 'null' : r.grass}, indoor: ${r.indoor === null ? 'null' : r.indoor} },`);
   writeFileSync(OUT, `${[...header, ...body, '];'].join('\n')}\n`);
   console.log(`\n${rows.length} venues matched, ${dropped.length} left out`);
   for (const d of dropped.slice(0, 20)) console.log(`  left out: ${d}`);

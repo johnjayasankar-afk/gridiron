@@ -31,8 +31,6 @@ export interface BowlTier {
 
 export interface Bowl {
   tiers: BowlTier[];
-  /** Roughly how many seats are lit, which is what makes a big bowl read as full. */
-  seats: number;
   /** How far out the floodlight towers stand, so they clear the stands they light. */
   towerX: number;
   towerZ: number;
@@ -83,11 +81,14 @@ export function bowlFor(capacity: number | null | undefined): Bowl {
   if (ends) {
     tiers.push({ x: -79, z: 0, rotation: Math.PI / 2, ...end }, { x: 79, z: 0, rotation: -Math.PI / 2, ...end });
   }
-  // Roughly how many lit seats the bowl is worth, so the crowd fills what is actually there.
-  const seats = tiers.reduce((n, t) => n + Math.round((t.length / 0.78) * t.rows * 0.54), 0);
+  /*
+   * The crowd needs no figure of its own. Seat lights are scattered per row and
+   * along each stand's length, so a bowl with more rows and longer stands holds
+   * more of them by construction: making the count an explicit number would be a
+   * second way of saying the same thing, and the two could disagree.
+   */
   return {
     tiers,
-    seats,
     towerX: 84 * Math.max(1, scale),
     towerZ: 54 * Math.max(1, scale),
     capacity: known,

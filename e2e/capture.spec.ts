@@ -262,6 +262,22 @@ for (const [name, game] of [
   });
 }
 
+/**
+ * A finished game, looked at from its first play. The score, the clock and the
+ * period all read that moment rather than the one the game ended at, which is
+ * what this used to get wrong.
+ */
+test('v5: a finished game, from an earlier play', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReplay(page, { path: '/game/nfl-401872926', at: 0.95 });
+  await expect(page.locator('.scoreboard')).toBeVisible();
+  await page.getByRole('button', { name: 'First play of the game' }).click();
+  await expect(page.locator('.situation-panel')).toContainText('Historical view');
+  await settle(page);
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${OUT}/game-1440-historical.png` });
+});
+
 test('an empty day and the command palette', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openReplay(page, { at: 0 });

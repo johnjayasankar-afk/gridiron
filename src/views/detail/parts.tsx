@@ -37,9 +37,10 @@ function Timeouts({ remaining }: { remaining: number }) {
   );
 }
 
-export function Scoreboard({ game, situation }: { game: GameSummary; situation: Situation | null }) {
+export function Scoreboard({ game, situation, historical = false }: { game: GameSummary; situation: Situation | null; historical?: boolean }) {
   const favorites = usePrefs((s) => s.favorites);
   const dark = useIsDark();
+  // A past play's state is still a state: possession, timeouts and the down all read, but nothing here is happening now.
   const live = isLiveOrPaused(game.status.kind);
   const possession = live ? (situation?.possession ?? null) : null;
   const broadcast = primaryBroadcast(game);
@@ -88,7 +89,7 @@ export function Scoreboard({ game, situation }: { game: GameSummary; situation: 
     <section className="scoreboard" aria-label="Scoreboard" style={{ '--team-away': accentFor(game.away.color, dark), '--team-home': accentFor(game.home.color, dark) } as CSSProperties}>
       {team('away')}
       <div className="sb-center">
-        <StatusPill game={game} />
+        <StatusPill game={game} historical={historical} />
         {down && <p className="sb-sub mono">{down}</p>}
         {broadcast && <p className="sb-sub">{broadcast}</p>}
       </div>
@@ -211,13 +212,14 @@ function Headshot({ athlete }: { athlete: LeaderAthlete }) {
 }
 
 /** Passing, rushing and receiving leaders for each team, exactly as the provider reports them. */
-export function LeadersPanel({ detail, game }: { detail: GameDetail; game: GameSummary }) {
+export function LeadersPanel({ detail, game, historical = false }: { detail: GameDetail; game: GameSummary; historical?: boolean }) {
   const dark = useIsDark();
   const categories = LEADER_CATEGORIES.filter((c) => detail.leaders.some((t) => t.leaders.some((l) => l.category === c)));
   if (!categories.length) return null;
   return (
     <section className="panel leaders" aria-label="Game leaders">
-      <p className="eyebrow">{game.status.kind === 'final' ? 'Game leaders' : 'Leaders so far'}</p>
+      {/* Leaders are reported as they stand, not per play, so while a past play is being looked at the heading says which it is. */}
+      <p className="eyebrow">{historical ? 'Leaders as they stand' : game.status.kind === 'final' ? 'Game leaders' : 'Leaders so far'}</p>
       {categories.map((category) => (
         <div key={category} className="leaders-group">
           <p className="leaders-cat">{LEADER_TITLE[category]}</p>
@@ -355,10 +357,19 @@ export function ScoringTimeline({ detail, game, onSelectPlay }: { detail: GameDe
   );
 }
 
-export function StatsTable({ detail, game }: { detail: GameDetail; game: GameSummary }) {
+export function StatsTable({ detail, game, historical = false }: { detail: GameDetail; game: GameSummary; historical?: boolean }) {
   if (!detail.stats.length) return <p className="empty-note">Team stats are not reported yet{game.coverage.teamStats ? '' : ' for this game'}.</p>;
   return (
     <div className="table-wrap">
+      {/*
+        The one thing on this page that cannot rewind. The scoreboard, the field,
+        the odds and the win probability all read the play being looked at,
+        because each is reported per play; team totals are reported once, as they
+        stand. Saying so is the same courtesy the sportsbook block pays when it
+        cannot rewind either, and it is better than letting a total be read as
+        the total at a play it was not.
+      */}
+      {historical && <p className="empty-note">These are the totals as they stand, not as they were at the play being looked at.</p>}
       <table className="stats">
         <caption className="sr-only">Team statistics</caption>
         <thead>
@@ -423,10 +434,25 @@ export function GameInfo({ game, detail }: { game: GameSummary; detail: GameDeta
           </dd>
         </div>
       )}
+      {/*
+        Capacity is stated for the same reason the surface and the roof are: it
+        changes how the field is drawn, more than either of them, because the
+        bowl around the field is built from it.
+      */}
+      {game.venue?.capacity != null && (
+        <div>
+          <dt>Capacity</dt>
+          <dd>{game.venue.capacity.toLocaleString()}</dd>
+        </div>
+      )}
       {detail?.attendance != null && (
         <div>
           <dt>Attendance</dt>
-          <dd>{detail.attendance.toLocaleString()}</dd>
+          <dd>
+            {detail.attendance.toLocaleString()}
+            {/* Against the capacity where both are known, because a number on its own does not say whether a ground was full. */}
+            {game.venue?.capacity != null && <span className="muted"> of {game.venue.capacity.toLocaleString()}</span>}
+          </dd>
         </div>
       )}
       <div>

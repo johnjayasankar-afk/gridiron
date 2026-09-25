@@ -69,7 +69,16 @@ test('game page camera and replay stay within budget', async ({ page }) => {
     await page.waitForTimeout(1500);
   }
   const info = await page.evaluate(() => window.__gridironGraphics?.info());
-  writeFileSync('docs/perf-game.json', `${JSON.stringify({ recordedAt: new Date().toISOString(), environment: 'Production build, replay mode, game page at 1440x900 with drive replay playing and camera presets cycling', info }, null, 2)}\n`);
+  /*
+   * Which game the first live card is decides whether this number includes a
+   * roof, which is three draws on its own. Recorded beside the count so the
+   * figure can be compared with another run rather than guessed at.
+   */
+  const field = await page.evaluate(() => {
+    const f = window.__gridironField?.();
+    return { venue: document.title, roof: f?.roof ?? null, indoor: f?.sky?.indoor ?? null };
+  });
+  writeFileSync('docs/perf-game.json', `${JSON.stringify({ recordedAt: new Date().toISOString(), environment: 'Production build, replay mode, game page at 1440x900 with drive replay playing and camera presets cycling', field, info }, null, 2)}\n`);
   expect(info?.views).toBe(1);
   /*
    * The arena around the field is decoration, and decoration has to stay cheap.

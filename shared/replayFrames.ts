@@ -4,8 +4,8 @@
  * only; a play without one shows "Ball spot unavailable" rather than a guess.
  */
 import { teamFor } from './format.js';
-import type { Drive, GameDetail, PlayEvent, PlayKind, Score, Situation } from './model.js';
-import { ADMIN_KINDS, TOUCHDOWN_KINDS } from './model.js';
+import type { Drive, GameDetail, GameSummary, PlayEvent, PlayKind, Score, Situation } from './model.js';
+import { ADMIN_KINDS, isOver, TOUCHDOWN_KINDS } from './model.js';
 import { situationFromPlays } from './situation.js';
 import { periodShort } from './util.js';
 
@@ -197,4 +197,43 @@ export function catchUp(detail: GameDetail, sinceOrder: number | null, bigPlayYa
   const scope = sinceOrder === null ? 'this game' : `${plays.length} new ${plays.length === 1 ? 'play' : 'plays'}`;
   const headline = plays.length === 0 ? 'No new plays reported' : parts.length ? `${parts.join(', ')} in ${scope}` : `Nothing major in ${scope}`;
   return { newPlays: plays.length, items, headline, scoreBefore: before?.scoreAfter ?? null };
+}
+
+/**
+ * The game as it stood at the play being looked at.
+ *
+ * Stepping back to an early play used to leave the scoreboard and the scorebug
+ * showing the final score, so the page read "Q1 13:33" beside 35 to 14, which is
+ * two different moments presented as one. The frame already carries the score
+ * after its play and the situation it left behind; this puts them on the game
+ * itself so that everything drawn from a game is consistent by construction
+ * rather than by each caller remembering to ask.
+ *
+ * The status becomes what it was then: a game in progress at that play's period
+ * and clock. The provider's own status text is dropped rather than kept, because
+ * "Final" is a statement about a moment that has not happened yet from where the
+ * viewer is standing. The one exception is the last play of a finished game,
+ * which is the final whistle and should say so.
+ *
+ * Everything that is a fact about the fixture rather than the moment, which is
+ * the teams, the venue, the broadcast and the records, is left alone.
+ */
+export function gameAtFrame(game: GameSummary, frame: PlayFrame | null): GameSummary {
+  if (!frame) return game;
+  const atTheEnd = frame.index === frame.total - 1 && isOver(game.status.kind);
+  if (atTheEnd) return { ...game, score: frame.score, situation: frame.situation };
+  return {
+    ...game,
+    score: frame.score,
+    situation: frame.situation,
+    status: {
+      ...game.status,
+      kind: 'in_progress',
+      period: frame.play.period ?? game.status.period,
+      clock: frame.play.clock ?? game.status.clock,
+      // Neither is known for a past play, and a stale one is worse than none.
+      clockSeconds: null,
+      detail: null,
+    },
+  };
 }

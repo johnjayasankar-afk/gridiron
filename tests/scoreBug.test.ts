@@ -9,13 +9,14 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { GameSummary, Situation } from '../shared/model';
+import { StatusPill } from '../src/components/StatusPill';
 import { ScoreBug } from '../src/field/ScoreBug';
 import { game, situation } from './helpers/builders';
 
 const base = game({ id: 'nfl-1', home: 21, away: 17, period: 3, clock: '4:12' });
 
 const render = (s: Situation | null, over: Partial<GameSummary> = {}) =>
-  renderToStaticMarkup(createElement(ScoreBug, { game: { ...base, ...over }, situation: s, frame: null }));
+  renderToStaticMarkup(createElement(ScoreBug, { game: { ...base, ...over }, situation: s }));
 
 describe('what the bug says', () => {
   it('carries both sides, their scores and the clock', () => {
@@ -65,6 +66,20 @@ describe('timeouts', () => {
   });
 });
 
+describe('before kickoff', () => {
+  it('is not drawn at all, because there is nothing for it to say', () => {
+    const scheduled = game({ id: 'nfl-2', kind: 'scheduled' });
+    expect(renderToStaticMarkup(createElement(ScoreBug, { game: scheduled, situation: null }))).toBe('');
+  });
+
+  it('is drawn for a finished game, where the final score is the thing worth carrying', () => {
+    const final = game({ id: 'nfl-3', kind: 'final', home: 31, away: 24 });
+    const html = renderToStaticMarkup(createElement(ScoreBug, { game: final, situation: null }));
+    expect(html).toContain('31');
+    expect(html).toContain('24');
+  });
+});
+
 describe('what it does without a situation', () => {
   it('still says the score and the clock, because those are reported without one', () => {
     const html = render(null);
@@ -84,5 +99,28 @@ describe('what it does without a situation', () => {
 
   it('is hidden from screen readers, because every figure in it is already in prose elsewhere', () => {
     expect(render(situation())).toContain('aria-hidden="true"');
+  });
+});
+
+/**
+ * The pill is handed the state of the play being looked at, so without being
+ * told it is a past one it announces the live dot and says "Live" over a moment
+ * that finished hours ago.
+ */
+describe('the status pill while a past play is being looked at', () => {
+  const past = game({ id: 'nfl-9', kind: 'in_progress', period: 1, clock: '15:00' });
+
+  it('keeps the clock and the period, and drops the claim that it is happening now', () => {
+    const now = renderToStaticMarkup(createElement(StatusPill, { game: past }));
+    const then = renderToStaticMarkup(createElement(StatusPill, { game: past, historical: true }));
+    for (const html of [now, then]) expect(html).toContain('Q1 15:00');
+    expect(now).toContain('live-dot');
+    expect(now).toContain('Live, ');
+    expect(then).not.toContain('live-dot');
+    expect(then).not.toContain('Live, ');
+  });
+
+  it('is still the live pill when nothing is being looked at, which is the ordinary case', () => {
+    expect(renderToStaticMarkup(createElement(StatusPill, { game: past, historical: false }))).toContain('tone-live');
   });
 });

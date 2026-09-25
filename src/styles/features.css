@@ -1618,19 +1618,42 @@ a.season-node:hover {
  * Everything in it is either reported or absent. There is no placeholder row and
  * no zero standing in for a number nobody gave.
  */
-.score-bug {
+/*
+ * The field's bottom left corner, which the tags and the bug share.
+ *
+ * They were pinned to it independently and landed on top of each other. The bug
+ * changes height with whether a down was reported, so nudging either by a fixed
+ * amount would only have moved the collision; stacked in flow they cannot
+ * overlap at any height.
+ */
+.field-corner {
   position: absolute;
   left: 14px;
-  bottom: 40px;
+  bottom: 11px;
   /* Above the shared canvas, like every other overlay the field carries; below that it is drawn under the field. */
   z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.score-bug {
   display: grid;
   grid-template-columns: auto auto;
   grid-template-areas: 'teams clock' 'down down';
   align-items: stretch;
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(2, 8, 5, 0.82);
+  /*
+   * Nearly solid, and blurring what is behind it, the way the field's other
+   * overlays do. At 82 per cent the end zone lettering read straight through the
+   * clock, which on a bug is the one thing that has to be unambiguous.
+   */
+  background: rgba(2, 8, 5, 0.93);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
   box-shadow:
     0 0 0 1px rgba(240, 247, 243, 0.14),
     0 10px 30px rgb(0 0 0 / 0.45);
@@ -1680,6 +1703,20 @@ a.season-node:hover {
   color: var(--on-dark);
   text-align: right;
   min-width: 26px;
+  /* The number rolls in from off the top or the bottom, so the box has to clip. */
+  display: inline-block;
+  height: 1.12em;
+  line-height: 1.12;
+  overflow: hidden;
+}
+
+.bug-score .score-num {
+  display: block;
+}
+
+/* Points going on the board are worth a moment; points coming off, on the way back through a game, are not. */
+.bug-score.roll-up {
+  animation: score-flash 900ms var(--ease) both;
 }
 
 /* Who has the ball, as a broadcast says it: the row is lit, not labelled. */
@@ -1719,9 +1756,10 @@ a.season-node:hover {
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  padding: 0 12px;
+  padding: 0 13px;
   border-left: 1px solid rgba(240, 247, 243, 0.1);
   text-align: center;
+  white-space: nowrap;
 }
 
 .bug-period {
@@ -1736,6 +1774,13 @@ a.season-node:hover {
   color: var(--on-dark);
 }
 
+/* FINAL, HALFTIME, END Q3. One line where the period and the clock would be two. */
+.bug-state {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--on-dark);
+}
+
 .bug-down {
   grid-area: down;
   display: flex;
@@ -1743,7 +1788,7 @@ a.season-node:hover {
   gap: 8px;
   padding: 6px 10px;
   border-top: 1px solid rgba(240, 247, 243, 0.1);
-  background: rgba(2, 8, 5, 0.55);
+  background: rgba(240, 247, 243, 0.04);
   color: var(--on-dark-2);
   font-size: 11px;
 }
@@ -1767,9 +1812,12 @@ a.season-node:hover {
 }
 
 @media (max-width: 720px) {
-  .score-bug {
+  .field-corner {
     left: 8px;
-    bottom: 34px;
+    bottom: 28px;
+  }
+
+  .score-bug {
     font-size: 11px;
   }
 

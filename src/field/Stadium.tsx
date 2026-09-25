@@ -193,9 +193,18 @@ function build(bowl: Bowl) {
    * through, which is also what a roof looks like from underneath.
    */
   const ROOF_Y = 20;
+  /*
+   * Facing up, and single sided.
+   *
+   * Every camera this field has sits above the deck: the isometric one at 94, the
+   * broadcast one at 44, the top-down one at 196, against a deck at 20. So the
+   * face that is ever seen is the top one, and drawing both sides was drawing one
+   * that nothing can look at. It was not free either: the roof cost six draw
+   * calls as two-sided and three as one, measured on an identical scene.
+   */
   const band = (w: number, d: number, x: number, z: number) => {
     const g = new THREE.PlaneGeometry(w, d);
-    g.rotateX(Math.PI / 2); // facing down, because it is only ever seen from below or edge on
+    g.rotateX(-Math.PI / 2);
     g.translate(x, ROOF_Y, z);
     return g;
   };
@@ -209,7 +218,7 @@ function build(bowl: Bowl) {
     const x = (i / 6) * OUTER.x;
     for (const side of [-1, 1]) {
       const rib = new THREE.PlaneGeometry(0.5, OUTER.z - OPENING.z);
-      rib.rotateX(Math.PI / 2);
+      rib.rotateX(-Math.PI / 2);
       rib.translate(x, ROOF_Y - 0.12, side * (OPENING.z + OUTER.z) / 2);
       ribs.push(rib);
     }
@@ -218,14 +227,14 @@ function build(bowl: Bowl) {
     const z = (i / 3) * OPENING.z;
     for (const side of [-1, 1]) {
       const rib = new THREE.PlaneGeometry(OUTER.x - OPENING.x, 0.5);
-      rib.rotateX(Math.PI / 2);
+      rib.rotateX(-Math.PI / 2);
       rib.translate(side * (OPENING.x + OUTER.x) / 2, ROOF_Y - 0.12, z);
       ribs.push(rib);
     }
   }
   // The membrane over the opening: a ceiling you can see the game through.
   const membrane = new THREE.PlaneGeometry(OPENING.x * 2, OPENING.z * 2);
-  membrane.rotateX(Math.PI / 2);
+  membrane.rotateX(-Math.PI / 2);
   membrane.translate(0, ROOF_Y - 0.3, 0);
 
   const lightGeometry = new THREE.BufferGeometry();
@@ -285,6 +294,13 @@ export const Stadium = memo(function Stadium({ animation, homeColor, awayColor, 
   const invalidate = useThree((s) => s.invalidate);
   const towers = towerStrength(sky);
   const roofed = sky?.indoor === true;
+  useEffect(() => {
+    // What the bowl actually drew, rather than what was asked for: the arena is only ever on the game page.
+    fieldProbe.roof = roofed;
+    return () => {
+      fieldProbe.roof = false;
+    };
+  }, [roofed]);
 
   const uniforms = useMemo(
     () => ({
@@ -368,12 +384,12 @@ export const Stadium = memo(function Stadium({ animation, homeColor, awayColor, 
        * The roof, for a venue the provider says is indoors. The deck is solid
        * and dark because it is a ceiling seen from underneath, the ribs are lit
        * like the rails on the stands, and the membrane over the field is faint
-       * enough to play under. All three are drawn from both sides: a camera
-       * dropped to the broadcast angle looks along the deck rather than up at it.
+       * enough to play under. All three are single sided and face up, because
+       * every camera this field has sits above the deck.
        */
-      roof: haze(new THREE.MeshBasicMaterial({ color: '#07150f', transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }), 0.7),
-      ribs: new THREE.MeshBasicMaterial({ color: '#63d6ae', transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }),
-      membrane: new THREE.MeshBasicMaterial({ color: '#8fe9c8', transparent: true, opacity: 0.045, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }),
+      roof: haze(new THREE.MeshBasicMaterial({ color: '#07150f', transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }), 0.7),
+      ribs: new THREE.MeshBasicMaterial({ color: '#63d6ae', transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
+      membrane: new THREE.MeshBasicMaterial({ color: '#8fe9c8', transparent: true, opacity: 0.045, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
     };
   }, [uniforms]);
   useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials]);

@@ -34,6 +34,7 @@ import type {
   GameStatus,
   GameStatusKind,
   GameSummary,
+  VenueImage,
   HistoryGap,
   LeagueId,
   PlayBrief,
@@ -52,7 +53,7 @@ import { clockToSeconds, fingerprint } from '../../../shared/util.js';
 import { classifyPlayType, parseConversion, parseReview } from './classify.js';
 import { lastPlayWinProbability, latestWinProbability, normalizeLines, normalizePredictor, normalizeVenueImage, normalizeWeather, normalizeWinProbability } from './odds.js';
 import { arr, at, bool, hexColor, num, obj, safeUrl, str } from './raw.js';
-import { VENUE_CAPACITIES } from '../../../shared/venues.js';
+import { VENUES } from '../../../shared/venues.js';
 
 export const PROVIDER_NAME = 'ESPN';
 export const SITE_BASE = 'https://site.api.espn.com/apis/site/v2/sports/football';
@@ -66,7 +67,7 @@ export const RESULT_LIMIT = 500;
  * stadium's capacity does not change between polls, or between a live game and a
  * replay of it, so there is nothing to look up and nothing to wait for.
  */
-const CAPACITIES = new Map(VENUE_CAPACITIES.map((v) => [v.espnId, v.capacity]));
+const BY_ID = new Map(VENUES.map((v) => [v.espnId, v]));
 /*
  * By id first, and by name where there is no id.
  *
@@ -77,11 +78,44 @@ const CAPACITIES = new Map(VENUE_CAPACITIES.map((v) => [v.espnId, v.capacity]));
  * exact rather than approximate. It is still only taken when the name belongs to
  * exactly one venue in the table, which a test holds.
  */
-const BY_NAME = new Map(VENUE_CAPACITIES.map((v) => [v.name, v.capacity]));
-const capacityFor = (venueId: string | null, name: string | null): number | null => {
-  if (venueId) return CAPACITIES.get(venueId) ?? null;
-  return name ? (BY_NAME.get(name) ?? null) : null;
-};
+/*
+ * By name, but only for names that belong to one venue.
+ *
+ * The table names two different grounds "Greene Stadium", and a fallback that
+ * picked one of them would put another venue's facts on a game. A name that is
+ * not unique is simply not matchable, which costs those two venues their row and
+ * costs nothing else.
+ */
+const NAME_COUNTS = VENUES.reduce((counts, v) => counts.set(v.name, (counts.get(v.name) ?? 0) + 1), new Map<string, number>());
+const BY_NAME = new Map(VENUES.filter((v) => NAME_COUNTS.get(v.name) === 1).map((v) => [v.name, v]));
+const recordFor = (venueId: string | null, name: string | null) => (venueId ? BY_ID.get(venueId) : name ? BY_NAME.get(name) : undefined) ?? null;
+
+/**
+ * A venue as the payload describes it, filled in from the table where the
+ * payload was quiet.
+ *
+ * The payload always wins: it is the live description of this game at this
+ * place, and the table is a reference. What the table answers is the scoreboard,
+ * which names a venue and says whether it has a roof and nothing else. Without
+ * it every card on a college Saturday drew mowing stripes whether the ground had
+ * grass or not, because the surface is only on a venue's own document, and 0 of
+ * 116 cards on a real Saturday knew it.
+ */
+function venueFrom(venue: Record<string, unknown>, image: VenueImage | null): NonNullable<GameSummary['venue']> {
+  const id = str(venue.id);
+  const name = str(venue.fullName);
+  const known = recordFor(id, name);
+  return {
+    id,
+    name,
+    city: str(at(venue, 'address', 'city')),
+    state: str(at(venue, 'address', 'state')),
+    indoor: bool(venue.indoor) ?? known?.indoor ?? null,
+    grass: bool(venue.grass) ?? known?.grass ?? null,
+    image,
+    capacity: known?.capacity ?? null,
+  };
+}
 
 export const espnLeaguePath = (league: LeagueId) => (league === 'nfl' ? 'nfl' : 'college-football');
 
@@ -455,7 +489,7 @@ export function normalizeScoreboardEvent(
     situation,
     broadcasts: normalizeBroadcasts(comp),
     venue: venue
-      ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')), indoor: bool(venue.indoor), grass: bool(venue.grass), image: normalizeVenueImage(venue.images), capacity: capacityFor(str(venue.id), str(venue.fullName)) }
+      ? venueFrom(venue, normalizeVenueImage(venue.images))
       : null,
     // The weather at the venue, as reported. A roofed venue has none, which is the roof saying so.
     weather: normalizeWeather(e.weather),
@@ -844,7 +878,7 @@ export function normalizeSummary(
         : null),
     broadcasts: normalizeBroadcasts(comp),
     venue: venue
-      ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')), indoor: bool(venue.indoor), grass: bool(venue.grass), image: normalizeVenueImage(venue.images), capacity: capacityFor(str(venue.id), str(venue.fullName)) }
+      ? venueFrom(venue, normalizeVenueImage(venue.images))
       : null,
     weather: normalizeWeather(at(root, 'header', 'weather') ?? root.weather),
     neutralSite: bool(comp.neutralSite),

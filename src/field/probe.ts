@@ -55,6 +55,8 @@ export interface FieldProbe {
   sky: { kind: string; night: boolean; indoor: boolean; drops: number } | null;
   /** How much of the far end of the field the air has taken, 0 when the sky is clear or unreported. */
   haze: number;
+  /** Whether the bowl drew a roof, which only a venue the provider says is indoors gets. */
+  roof: boolean;
   /** The team whose mark is painted at the fifty, which is the home team's. */
   midfield: string | null;
   /** How loudly the stands are answering, 0 when they are not, and what they are answering. */
@@ -85,6 +87,7 @@ export const fieldProbe: FieldProbe = {
   drive: null,
   sky: null,
   haze: 0,
+  roof: false,
   cheer: 0,
   cheerFor: null,
 };

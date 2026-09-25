@@ -1752,10 +1752,9 @@ input[type='range'] {
   pointer-events: none;
 }
 
-.field-detail .field-tags {
-  top: auto;
-  bottom: 34px;
-  left: 12px;
+/* On the game page the tags sit in the corner stack with the scorebug rather than anchoring themselves. */
+.field-detail .field-corner .field-tags {
+  position: static;
 }
 
 .field-tag {
@@ -1807,11 +1806,8 @@ input[type='range'] {
   color: #3b1d02;
 }
 
+/* Positioned by .field-corner, which owns the whole bottom-left column. */
 .field-orientation {
-  position: absolute;
-  left: 14px;
-  bottom: 11px;
-  z-index: 7;
   color: var(--on-dark-3);
   font-size: 10.5px;
   pointer-events: none;
@@ -2968,8 +2964,135 @@ body.wall-mode {
   gap: 4px 8px;
 }
 
+/*
+ * The scrubber is drawn rather than left to the platform, in three layers: the
+ * track and how far through the game you are on the label itself, the scores on
+ * top of that, and the control's own thumb over both. A native range paints its
+ * track last, which would have buried the marks, and its thumb is whatever width
+ * the platform says, which the marks have to be inset by to line up with it.
+ */
+.rp-scrub {
+  --at: 0;
+  --rp-fill: calc(var(--rp-thumb) / 2 + var(--at) * (100% - var(--rp-thumb)));
+  display: block;
+  position: relative;
+}
+
+.rp-scrub::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--forest-2) 0 var(--rp-fill), var(--border) var(--rp-fill) 100%);
+  pointer-events: none;
+}
+
 .rp-scrub input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  z-index: 2;
+  display: block;
   width: 100%;
+  height: var(--rp-thumb);
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.rp-scrub input:disabled {
+  cursor: default;
+}
+
+/* Full thumb height, so the thumb sits centred on it with no offset to get wrong. */
+.rp-scrub input::-webkit-slider-runnable-track {
+  height: var(--rp-thumb);
+  background: transparent;
+}
+
+.rp-scrub input::-moz-range-track {
+  height: var(--rp-thumb);
+  background: transparent;
+}
+
+.rp-scrub input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: var(--rp-thumb);
+  height: var(--rp-thumb);
+  border: 0;
+  border-radius: 50%;
+  background: var(--forest-2);
+  box-shadow: 0 0 0 2px var(--surface), 0 1px 5px rgba(0, 0, 0, 0.5);
+}
+
+.rp-scrub input::-moz-range-thumb {
+  width: var(--rp-thumb);
+  height: var(--rp-thumb);
+  border: 0;
+  border-radius: 50%;
+  background: var(--forest-2);
+  box-shadow: 0 0 0 2px var(--surface), 0 1px 5px rgba(0, 0, 0, 0.5);
+}
+
+.rp-scrub input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px color-mix(in srgb, var(--forest-2) 50%, transparent);
+}
+
+.rp-scrub input:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px color-mix(in srgb, var(--forest-2) 50%, transparent);
+}
+
+/*
+ * Where the points landed. Inset by half a thumb at each end, which is the
+ * travel a range input has: the first play sits under a thumb pushed fully
+ * left, not at the very edge of the control.
+ */
+.rp-marks {
+  position: absolute;
+  inset: 0 calc(var(--rp-thumb) / 2);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.rp-mark {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 11px;
+  margin-left: -1px;
+  border-radius: 1px;
+  transform: translateY(-50%);
+}
+
+/*
+ * Where a period starts, cut out of the bar rather than drawn on it, so it
+ * reads on the part behind the thumb and the part ahead of it alike. A line in
+ * a colour has to win against both, and a gap does not have to win against
+ * anything. Shorter than a score, because it is structure rather than an event.
+ */
+.rp-period {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 6px;
+  margin-left: -1px;
+  transform: translateY(-50%);
+  background: var(--surface);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rp-mark {
+    transition: height 140ms var(--ease);
+  }
+}
+
+.rp-scrub:hover .rp-mark {
+  height: 15px;
 }
 
 .rp-readout {
