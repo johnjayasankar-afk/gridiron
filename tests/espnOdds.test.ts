@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newDiagnostics, normalizeScoreboardEvent, normalizeSummary } from '../server/providers/espn/normalize';
-import { lastPlayWinProbability, normalizeCoreOdds, normalizeLines, normalizePredictor, normalizeWinProbability } from '../server/providers/espn/odds';
+import { coreOddsUrl, lastPlayWinProbability, normalizeCoreOdds, normalizeLines, normalizePredictor, normalizeWinProbability } from '../server/providers/espn/odds';
 import { fixture } from './helpers/fixtures';
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -113,5 +113,30 @@ describe("the sportsbook's live line, from ESPN's core API", () => {
     expect(normalizeCoreOdds({ items: [] }, '9', '1')).toBeNull();
     expect(normalizeCoreOdds({ items: [{ provider: { name: 'Book', priority: 1 } }] }, '9', '1')).toBeNull();
     expect(normalizeCoreOdds(null, '9', '1')).toBeNull();
+  });
+});
+
+/**
+ * A game id arrives from whoever is connected. The parser that reads one refuses
+ * slashes but allows dots, so `nfl-..` parses; this URL puts the id into two
+ * path segments, and a client should not be able to steer which path the server
+ * asks the provider for, even on the provider's own host.
+ */
+describe('the live odds URL', () => {
+  it('is built for a real event id', () => {
+    expect(coreOddsUrl('nfl', '401872948')).toBe('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/401872948/competitions/401872948/odds?limit=10');
+    expect(coreOddsUrl('cfb', '401869941')).toContain('/leagues/college-football/events/401869941/');
+  });
+
+  it('is refused for anything that is not digits, so nothing can walk the path', () => {
+    for (const bad of ['..', '.', 'a', '4018..72948', '401872948:1', '', '1'.repeat(33), '../../v2']) {
+      expect(coreOddsUrl('nfl', bad), bad).toBeNull();
+    }
+  });
+
+  it('never produces a URL with a traversal segment or another host', () => {
+    const url = coreOddsUrl('nfl', '401872948')!;
+    expect(url.startsWith('https://sports.core.api.espn.com/')).toBe(true);
+    expect(url).not.toContain('..');
   });
 });

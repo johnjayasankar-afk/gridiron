@@ -25,6 +25,48 @@ test.describe('preferences, graphics, layout and accessibility', () => {
     await expect(page.getByRole('dialog', { name: 'Alerts' }).getByRole('switch', { name: 'Turnover' })).toHaveAttribute('aria-checked', 'false');
   });
 
+  /**
+   * Switching the field style swaps every texture the ground wears and changes
+   * how the mark at the fifty is blended, on materials the field builds and owns
+   * so the sky can patch them. Nothing covered that path, and it is the one
+   * interaction that exercises the swap, so a field that came back blank or a
+   * shader that failed to recompile would have shipped unnoticed.
+   */
+  test('the field survives a change of style, both ways', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text());
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openReplay(page, { path: '/game/nfl-401872926', at: 0.5 });
+    // The canvas exists before the game page's field does, so wait for the field itself.
+    await expect.poll(() => page.evaluate(() => !!window.__gridironField), { timeout: 20_000 }).toBe(true);
+    /*
+     * Frames are drawn on demand, so the count is polled rather than read once:
+     * what is being asserted is that the field draws at all after the swap, and
+     * the swap has to get a frame of its own before that can be true.
+     */
+    const draws = async (what: string) =>
+      expect
+        .poll(async () => (await page.evaluate(() => window.__gridironGraphics?.info()))?.calls ?? 0, { timeout: 15_000, message: what })
+        .toBeGreaterThan(10);
+
+    await draws('the holographic field draws something');
+
+    const style = async (name: string) => {
+      await openMenuItem(page, 'Display settings');
+      await page.getByRole('dialog', { name: 'Display' }).getByRole('group', { name: 'Field style' }).getByRole('button', { name }).click();
+      await page.keyboard.press('Escape');
+      await expect.poll(() => page.evaluate(() => !!window.__gridironField), { timeout: 15_000 }).toBe(true);
+    };
+    await style('Classic turf');
+    await draws('the classic field draws something');
+    await style('Holographic');
+    await draws('the holographic field draws again');
+    expect(errors, 'switching field style logged an error').toEqual([]);
+  });
+
   test('muting a game is remembered', async ({ page }) => {
     await openReplay(page, { at: 0.3 });
     const card = liveCards(page).first();

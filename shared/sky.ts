@@ -179,3 +179,24 @@ export function multiplyHex(colour: string, by: string): string {
     )
     .join('')}`;
 }
+
+/**
+ * How much a venue's floodlights are doing, from the sky the game is played
+ * under.
+ *
+ * The bowl was lit the same way at one in the afternoon and at a quarter past
+ * eight, which is the one thing about a night game everybody can see. The
+ * provider's own condition id says which it is, so the towers, their pools on
+ * the grass and their beams carry the scene after dark and sit back in daylight.
+ * Indoors they are the only light there is.
+ *
+ * Exactly 1 with nothing reported, which is the value the bowl has always been
+ * drawn at, so a venue the provider said nothing about looks like it always did.
+ */
+export function towerStrength(sky: Sky | null): number {
+  if (!sky) return 1;
+  if (sky.indoor) return 1.15;
+  if (sky.night) return 1.55;
+  // Daylight overwhelms floodlights; a dark afternoon less so.
+  return sky.kind === 'clear' ? 0.45 : sky.kind === 'partly' ? 0.6 : 0.82;
+}

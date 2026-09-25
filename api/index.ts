@@ -18,6 +18,11 @@
  *   and 60s), so concurrent viewers share one provider request instead of each making one.
  * - The replay lab, watch parties and push alerts are not offered, because they
  *   need a long-lived process. Their routes and /api/health say so.
+ * - The recorded sportsbook line is written whenever a detail is fetched, so it
+ *   accumulates only for as long as one warm function lives and is fragmented
+ *   across the instances that answer a game's requests. A line at a play needs
+ *   something watching continuously, which is the persistent server; here the
+ *   panel says it has no line recorded rather than showing a gap as a reading.
  *
  * The persistent Node server (npm run build && npm start) is the full deployment.
  */

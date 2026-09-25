@@ -93,6 +93,29 @@ test.describe('accessibility audit', () => {
     await audit(page, 'display settings');
   });
 
+  /*
+   * A Content Security Policy that blocks something the app needs is a policy
+   * somebody will weaken rather than debug, so it is checked against the real
+   * page rather than reasoned about: the browser reports every refusal, and
+   * there should be none of them anywhere the app actually goes.
+   */
+  test('the policy blocks nothing the app needs', async ({ page }) => {
+    const refusals: string[] = [];
+    page.on('console', (m) => {
+      if (/content security policy|refused to (load|execute|connect|apply)/i.test(m.text())) refusals.push(m.text());
+    });
+    await openReplay(page, { at: 0.55 });
+    await expect(liveCards(page).first()).toBeVisible();
+    // A card carries a team image from the provider, which is the one cross-origin thing the policy allows.
+    await expect(liveCards(page).first().locator('img').first()).toBeVisible();
+    await liveCards(page).first().locator('.card-link').click();
+    await expect(page.locator('.scoreboard')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => !!window.__gridironField), { timeout: 20_000 }).toBe(true);
+    await page.keyboard.press('4');
+    await expect(page.getByRole('heading', { name: 'The tape' })).toBeVisible();
+    expect(refusals, 'the browser refused something the app asked for').toEqual([]);
+  });
+
   test('the not-found page', async ({ page }) => {
     await page.goto('/no-such-page');
     await expect(page.getByRole('heading', { name: 'There is no page at this address.' })).toBeVisible();

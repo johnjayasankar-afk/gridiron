@@ -401,19 +401,35 @@ test.describe('the field in 3D', () => {
  */
 test.describe('the sky over the field', () => {
   test('a game the provider reported snow for is played in the snow, at night', async ({ page }) => {
+    /*
+     * The sky is drawn by two shader patches, and a patch that stops applying is
+     * the failure this version already had once. Both signals are watched here
+     * because both were proven to fire: breaking an anchor on purpose throws to
+     * the page and collapses the field from about thirty four draw calls to
+     * seven. Reading the probe alone would not have caught either, because the
+     * probe reports the number that was computed and not the shader that used it.
+     */
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
     await page.setViewportSize({ width: 1440, height: 900 });
     await openReplay(page, { path: '/game/nfl-401872925', scenario: 'test-weather', at: 0.4 });
     await expect.poll(() => page.evaluate(() => !!window.__gridironField), { timeout: 20_000 }).toBe(true);
+    await expect.poll(async () => (await page.evaluate(() => window.__gridironGraphics?.info()))?.calls ?? 0, { timeout: 15_000 }).toBeGreaterThan(20);
     await expect.poll(() => page.evaluate(() => window.__gridironField?.()?.sky ?? null), { timeout: 20_000 }).toEqual({ kind: 'snow', night: true, indoor: false, drops: 1100 });
     // The field says what it is lit by, in the provider's own words, so the light is attributable.
     await expect(page.locator('.field-orientation')).toContainText('Snow · 24°F');
+    // And the air takes the far end of it: snow after dark is a real amount of haze, not a rounding of zero.
+    expect(await page.evaluate(() => window.__gridironField!().haze)).toBeGreaterThan(0.1);
     // And the scenario says the weather is not real, which is the whole reason it is allowed to exist.
     await expect(page.locator('.replay-bar')).toContainText('synthetic');
+    expect(errors, 'a shader patch stopped applying').toEqual([]);
   });
 
   test('a game the provider reported no weather for is lit exactly as it always was', async ({ page }) => {
     await openGame(page, 0.5);
     expect(await page.evaluate(() => window.__gridironField!().sky)).toBeNull();
+    // No reported sky means no haze at all, so the field is exactly as sharp as it always was.
+    expect(await page.evaluate(() => window.__gridironField!().haze)).toBe(0);
     const caption = await page.locator('.field-orientation').innerText();
     expect(caption).toContain('defends left');
     // No invented sky, no placeholder, nothing appended.

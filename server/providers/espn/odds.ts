@@ -229,13 +229,23 @@ export function normalizeCoreOdds(raw: unknown, homeProviderId: string, awayProv
 }
 
 /**
- * The core API's URL for a game's odds. The competition id equals the event id
- * for every football game ESPN reports, which is why one id fills both places.
+ * The core API's URL for a game's odds, or null for an id that has no business
+ * in one. The competition id equals the event id for every football game ESPN
+ * reports, which is why one id fills both places.
+ *
+ * The id is required to be digits, and that is a boundary rather than a
+ * formality. A game id arrives from whoever is connected, and while the parser
+ * that reads one already refuses slashes, it allows dots, so `nfl-..` parses and
+ * would have put `..` into two path segments of this URL. It stays on the
+ * provider's own host, so nothing could be pointed anywhere else, but a client
+ * should not be able to steer which path the server asks that host for. Every
+ * real event id the provider has ever issued is numeric, so this costs nothing;
+ * the summary endpoint takes its id in a query parameter, where a dot is inert.
  */
-export function coreOddsUrl(league: LeagueId, providerEventId: string): string {
+export function coreOddsUrl(league: LeagueId, providerEventId: string): string | null {
+  if (!/^\d{1,32}$/.test(providerEventId)) return null;
   const path = league === 'nfl' ? 'nfl' : 'college-football';
-  const id = encodeURIComponent(providerEventId);
-  return `https://sports.core.api.espn.com/v2/sports/football/leagues/${path}/events/${id}/competitions/${id}/odds?limit=10`;
+  return `https://sports.core.api.espn.com/v2/sports/football/leagues/${path}/events/${providerEventId}/competitions/${providerEventId}/odds?limit=10`;
 }
 
 /**

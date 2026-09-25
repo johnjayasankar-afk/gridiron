@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { FieldSvg } from '../src/field/FieldSvg';
 import { game } from './helpers/builders';
-import { SKY_STRENGTH, multiplyHex, skyFor, skyKindFor, skyLabel, skyLook, skyTint, type GameWeather } from '../shared/sky';
+import { SKY_STRENGTH, multiplyHex, skyFor, skyKindFor, skyLabel, skyLook, skyTint, towerStrength, type GameWeather } from '../shared/sky';
 
 const weather = (conditionId: number | null, temperature: number | null = 60, displayValue: string | null = 'Reported'): GameWeather => ({ conditionId, temperature, displayValue });
 
@@ -179,5 +179,26 @@ describe('the 2D field under its own sky', () => {
   it('tells a screen reader what the field is lit by, in the provider\'s own words', () => {
     expect(render(weather(22, 19, 'Snow'))).toContain('Reported at the venue: Snow · 19°F.');
     expect(render(null)).not.toContain('Reported at the venue');
+  });
+});
+
+describe("what the venue's floodlights are doing", () => {
+  it('is exactly what it has always been when nothing was reported, so an unreported venue is unchanged', () => {
+    expect(towerStrength(null)).toBe(1);
+  });
+
+  it('carries the scene after dark and sits back in daylight', () => {
+    const night = towerStrength(skyFor(weather(33), false));
+    const sun = towerStrength(skyFor(weather(1), false));
+    const overcast = towerStrength(skyFor(weather(7), false));
+    expect(night).toBeGreaterThan(1);
+    expect(sun).toBeLessThan(1);
+    // A dark afternoon leaves more for the towers to do than a bright one.
+    expect(overcast).toBeGreaterThan(sun);
+    expect(overcast).toBeLessThan(night);
+  });
+
+  it('is the only light there is indoors', () => {
+    expect(towerStrength(skyFor(weather(1), true))).toBeGreaterThan(1);
   });
 });

@@ -475,6 +475,7 @@ function jitter(ms, spread = 0.15, rand = Math.random) {
 }
 
 // server/engine.ts
+var FORGET_GAME_AFTER_MS = 2 * 60 * 6e4;
 var DEFAULT_INTERVALS = {
   slateLive: 25e3,
   slateIdle: 5 * 6e4,
@@ -1131,6 +1132,34 @@ var GridironEngine = class {
     }
     const active = this.activeDates();
     for (const [date, day] of this.days) if (!active.has(date) && this.now() - day.lastRequested > 30 * 6e4) this.days.delete(date);
+    this.forgetIdleGames();
+  }
+  /*
+   * Forget a game nobody has asked about for a long time, along with everything
+   * held for it.
+   *
+   * A day is forgotten when nobody looks at it, but the per game state was not:
+   * the detail, the two previous versions kept for deltas, the exchange's price
+   * history and the recorded sportsbook line all stayed for every game the
+   * process had ever been asked for. A season is a few hundred NFL games and the
+   * better part of a thousand college ones, and a detail is not small, so a
+   * server left up from September to January was holding all of them. A game
+   * still being polled has a task and is never forgotten however long ago
+   * somebody last asked for it, which is what keeps a followed game safe.
+   */
+  forgetIdleGames() {
+    const polled = /* @__PURE__ */ new Set();
+    for (const key of this.tasks.keys()) {
+      const [kind, id] = key.split("|");
+      if (kind === "detail") polled.add(id);
+    }
+    for (const [id, entry] of this.details) {
+      if (polled.has(id) || entry.inflight || this.now() - entry.lastRequested <= FORGET_GAME_AFTER_MS) continue;
+      this.details.delete(id);
+      this.histories.delete(id);
+      this.lines.delete(id);
+      this.lastPush.delete(id);
+    }
   }
   schedule(task, delayMs) {
     if (task.timer) clearTimeout(task.timer);
@@ -2758,9 +2787,9 @@ function normalizeCoreOdds(raw, homeProviderId, awayProviderId) {
   return { provider, details: str(e.details), favorite, moneyline, spread, total };
 }
 function coreOddsUrl(league, providerEventId) {
+  if (!/^\d{1,32}$/.test(providerEventId)) return null;
   const path = league === "nfl" ? "nfl" : "college-football";
-  const id = encodeURIComponent(providerEventId);
-  return `https://sports.core.api.espn.com/v2/sports/football/leagues/${path}/events/${id}/competitions/${id}/odds?limit=10`;
+  return `https://sports.core.api.espn.com/v2/sports/football/leagues/${path}/events/${providerEventId}/competitions/${providerEventId}/odds?limit=10`;
 }
 function preferLiveLines(fromSummary, fromCore) {
   if (!fromCore) return fromSummary;
@@ -3562,6 +3591,7 @@ var EspnProvider = class {
   seasons = /* @__PURE__ */ new Map();
   /** A venue's roof and surface, asked for once per venue and kept for the life of the process. */
   venues = /* @__PURE__ */ new Map();
+  venuesInFlight = /* @__PURE__ */ new Set();
   now;
   // ------------------------------------------------------------ slate
   async fetchSlate(league, dateKey, options) {
@@ -3712,14 +3742,14 @@ var EspnProvider = class {
     const league = parsedId.league;
     const path = league === "nfl" ? "nfl" : "college-football";
     const url = `https://site.api.espn.com/apis/site/v2/sports/football/${path}/summary?event=${encodeURIComponent(parsedId.providerEventId)}`;
-    const [res, odds] = await Promise.all([this.fetcher.getJson(url), this.fetcher.getJson(coreOddsUrl(league, parsedId.providerEventId))]);
+    const oddsUrl = coreOddsUrl(league, parsedId.providerEventId);
+    const [res, odds] = await Promise.all([this.fetcher.getJson(url), oddsUrl ? this.fetcher.getJson(oddsUrl) : Promise.resolve(null)]);
     if (!res.ok) return { ok: false, error: { scope: "Game detail", message: res.error, status: res.status }, receivedAt: res.receivedAt };
     const detail = normalizeSummary(res.data, league, knownDivisions ?? (league === "nfl" ? ["NFL"] : []), this.diagnostics);
     if (!detail) return { ok: false, error: { scope: "Game detail", message: "Game summary did not have the expected shape", status: res.status }, receivedAt: res.receivedAt };
-    const live = odds.ok ? normalizeCoreOdds(odds.data, detail.summary.home.providerId, detail.summary.away.providerId) : null;
+    const live = odds?.ok ? normalizeCoreOdds(odds.data, detail.summary.home.providerId, detail.summary.away.providerId) : null;
     const lines = preferLiveLines(detail.summary.lines ?? null, live);
-    const venue = await this.venueWith(league, detail.summary.venue);
-    const summary = { ...detail.summary, lines, ...venue ? { venue } : {} };
+    const summary = { ...detail.summary, lines, venue: this.venueWith(league, detail.summary.venue) };
     return { ok: true, detail: { ...detail, summary }, receivedAt: res.receivedAt };
   }
   /**
@@ -3729,18 +3759,37 @@ var EspnProvider = class {
    * first time a game there is followed and never again. It is deliberately not
    * fetched for a whole scoreboard: a college Saturday is sixty venues, and the
    * surface only matters for a field somebody is actually looking at.
+   *
+   * Nothing waits for it. A detail that had to wait on a second round trip the
+   * first time anybody opened a game would hold the whole game page behind a
+   * fact about the grass, so the first poll goes out with the surface unknown
+   * and the poll twelve seconds later carries it. Unknown is already a state the
+   * field draws correctly, which is what makes that safe.
    */
-  async venueWith(league, venue) {
-    if (!venue?.id) return venue;
-    if (!this.venues.has(venue.id)) {
-      const url = `https://sports.core.api.espn.com/v2/sports/football/leagues/${league === "nfl" ? "nfl" : "college-football"}/venues/${encodeURIComponent(venue.id)}`;
-      const res = await this.fetcher.getJson(url);
-      const doc = res.ok ? obj(res.data) : null;
-      this.venues.set(venue.id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null });
-    }
+  venueWith(league, venue) {
+    if (!venue?.id || !/^\d{1,32}$/.test(venue.id)) return venue;
     const known = this.venues.get(venue.id);
+    if (!known) {
+      void this.lookUpVenue(league, venue.id);
+      return venue;
+    }
     if (known.indoor === null && known.grass === null) return venue;
     return { ...venue, indoor: venue.indoor ?? known.indoor, grass: venue.grass ?? known.grass };
+  }
+  /** Reads a venue once, in the background, and remembers the answer even when it is nothing. */
+  async lookUpVenue(league, id) {
+    if (this.venuesInFlight.has(id)) return;
+    this.venuesInFlight.add(id);
+    try {
+      const url = `https://sports.core.api.espn.com/v2/sports/football/leagues/${league === "nfl" ? "nfl" : "college-football"}/venues/${id}`;
+      const res = await this.fetcher.getJson(url);
+      const doc = res.ok ? obj(res.data) : null;
+      this.venues.set(id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null });
+    } catch {
+      this.venues.set(id, { indoor: null, grass: null });
+    } finally {
+      this.venuesInFlight.delete(id);
+    }
   }
   // ------------------------------------------------------------ cache
   loadCoverageCache() {

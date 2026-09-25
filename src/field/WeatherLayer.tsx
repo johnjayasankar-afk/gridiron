@@ -21,6 +21,7 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { Sky } from '../../shared/sky';
 import { fieldProbe } from './probe';
+import { rainTexture, sparkTexture } from './textures';
 
 /** The volume weather falls through: the field and a little past its sidelines. */
 const SPAN_X = 132;
@@ -63,7 +64,14 @@ export const WeatherLayer = memo(function WeatherLayer({ sky, reducedMotion }: {
     const random = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
     const g = dropGeometry(COUNT[kind], random);
     const m = new THREE.PointsMaterial({
-      size: snow ? 0.42 : 0.2,
+      /*
+       * A flake is round and a drop is a streak, and both shapes live in the
+       * texture because a point sprite is a screen-aligned square whose size is
+       * one number: scaling it only makes a bigger square. The rain sprite is
+       * tall, so each drop is elongated along its fall the way rain is.
+       */
+      map: snow ? sparkTexture() : rainTexture(),
+      size: snow ? 0.42 : 0.55,
       sizeAttenuation: true,
       transparent: true,
       depthWrite: false,
@@ -104,11 +112,6 @@ export const WeatherLayer = memo(function WeatherLayer({ sky, reducedMotion }: {
         // Fades in at the top and out as it reaches the grass, so nothing pops.
         vFade = smoothstep(0.0, 0.08, fall) * (1.0 - smoothstep(0.86, 1.0, fall));`,
       );
-      const size = 'gl_PointSize = size;';
-      if (!shader.vertexShader.includes(size)) throw new Error('WeatherLayer: the points vertex shader no longer sets gl_PointSize the way this patch expects');
-      // Rain is a streak rather than a dot: the same point drawn tall.
-      shader.vertexShader = shader.vertexShader.replace(size, `gl_PointSize = size * (uDrift > 0.5 ? 1.0 : 1.0 + 2.2 * (1.0 - uDrift));`);
-
       shader.fragmentShader = `varying float vFade;\n${shader.fragmentShader}`;
       const out = 'outgoingLight = diffuseColor.rgb;';
       if (!shader.fragmentShader.includes(out)) throw new Error('WeatherLayer: the points fragment shader no longer has the outgoing light line this patch expects');

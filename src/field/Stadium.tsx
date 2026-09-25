@@ -19,6 +19,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGraphics } from '../state/graphics';
 import { scoringZone } from '../../shared/field';
+import { towerStrength, type Sky } from '../../shared/sky';
 import type { PlayAnimation } from '../../shared/playAnimation';
 import { accentFor } from './color';
 import { fieldProbe } from './probe';
@@ -206,11 +207,14 @@ export interface StadiumProps {
   animation: PlayAnimation | null;
   homeColor: string | null;
   awayColor: string | null;
+  /** The sky the provider reports at this venue, so the towers know whether they are the light. */
+  sky: Sky | null;
 }
 
-export const Stadium = memo(function Stadium({ animation, homeColor, awayColor }: StadiumProps) {
+export const Stadium = memo(function Stadium({ animation, homeColor, awayColor, sky }: StadiumProps) {
   const geometry = (cache ??= build());
   const invalidate = useThree((s) => s.invalidate);
+  const towers = towerStrength(sky);
 
   const uniforms = useMemo(
     () => ({
@@ -294,6 +298,16 @@ export const Stadium = memo(function Stadium({ animation, homeColor, awayColor }
   }, [uniforms]);
   useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials]);
 
+  /*
+   * The rig's strength rides on the materials rather than rebuilding them: the
+   * sky changes at most once for a game, and rebuilding these would throw away
+   * the crowd's shader and its flash state with them.
+   */
+  materials.pools.opacity = 0.075 * towers;
+  materials.panels.opacity = 0.45 * towers;
+  materials.cones.opacity = 0.13 * towers;
+  materials.lamps.opacity = Math.min(1, towers);
+
   // The cap is in device pixels, and the renderer's resolution moves with the
   // effects setting and with measured frame cost, so it has to move with it.
   const dpr = useGraphics((s) => s.dpr);
@@ -355,6 +369,7 @@ export const Stadium = memo(function Stadium({ animation, homeColor, awayColor }
   return (
     <group>
       <mesh geometry={geometry.stands} material={materials.stands} />
+      {/* The light the towers put on the grass, on the panels and down the beams: the whole lit rig moves together with how dark it is. */}
       <mesh geometry={geometry.pools} material={materials.pools} renderOrder={1} />
       <mesh geometry={geometry.rails} material={materials.rails} renderOrder={1} />
       <points geometry={geometry.lights} material={materials.crowd} />

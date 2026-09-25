@@ -51,6 +51,7 @@ export class EspnProvider implements SportsProvider {
   private seasons = new Map<string, { value: { season: number; seasonType: number } | null; at: number }>();
   /** A venue's roof and surface, asked for once per venue and kept for the life of the process. */
   private venues = new Map<string, { indoor: boolean | null; grass: boolean | null }>();
+  private venuesInFlight = new Set<string>();
   private readonly now: () => number;
 
   constructor(
@@ -232,15 +233,15 @@ export class EspnProvider implements SportsProvider {
      * so it costs a request and no extra waiting, and it is only ever asked for
      * on a game somebody is following, never for a whole Saturday's scoreboard.
      */
-    const [res, odds] = await Promise.all([this.fetcher.getJson<unknown>(url), this.fetcher.getJson<unknown>(coreOddsUrl(league, parsedId.providerEventId))]);
+    const oddsUrl = coreOddsUrl(league, parsedId.providerEventId);
+    const [res, odds] = await Promise.all([this.fetcher.getJson<unknown>(url), oddsUrl ? this.fetcher.getJson<unknown>(oddsUrl) : Promise.resolve(null)]);
     if (!res.ok) return { ok: false, error: { scope: 'Game detail', message: res.error, status: res.status }, receivedAt: res.receivedAt };
     const detail = normalizeSummary(res.data, league, knownDivisions ?? (league === 'nfl' ? ['NFL'] : []), this.diagnostics);
     if (!detail) return { ok: false, error: { scope: 'Game detail', message: 'Game summary did not have the expected shape', status: res.status }, receivedAt: res.receivedAt };
     // A live line that could not be read leaves the summary's own lines standing, which is what this did before there was one.
-    const live = odds.ok ? normalizeCoreOdds(odds.data, detail.summary.home.providerId, detail.summary.away.providerId) : null;
+    const live = odds?.ok ? normalizeCoreOdds(odds.data, detail.summary.home.providerId, detail.summary.away.providerId) : null;
     const lines = preferLiveLines(detail.summary.lines ?? null, live);
-    const venue = await this.venueWith(league, detail.summary.venue);
-    const summary = { ...detail.summary, lines, ...(venue ? { venue } : {}) };
+    const summary = { ...detail.summary, lines, venue: this.venueWith(league, detail.summary.venue) };
     return { ok: true, detail: { ...detail, summary } as GameDetail, receivedAt: res.receivedAt };
   }
 
@@ -251,19 +252,40 @@ export class EspnProvider implements SportsProvider {
    * first time a game there is followed and never again. It is deliberately not
    * fetched for a whole scoreboard: a college Saturday is sixty venues, and the
    * surface only matters for a field somebody is actually looking at.
+   *
+   * Nothing waits for it. A detail that had to wait on a second round trip the
+   * first time anybody opened a game would hold the whole game page behind a
+   * fact about the grass, so the first poll goes out with the surface unknown
+   * and the poll twelve seconds later carries it. Unknown is already a state the
+   * field draws correctly, which is what makes that safe.
    */
-  private async venueWith(league: LeagueId, venue: GameSummary['venue']): Promise<GameSummary['venue']> {
-    if (!venue?.id) return venue;
-    if (!this.venues.has(venue.id)) {
-      const url = `https://sports.core.api.espn.com/v2/sports/football/leagues/${league === 'nfl' ? 'nfl' : 'college-football'}/venues/${encodeURIComponent(venue.id)}`;
+  private venueWith(league: LeagueId, venue: GameSummary['venue']): GameSummary['venue'] {
+    // Digits only, for the same reason the odds URL demands them: this id lands in a path segment.
+    if (!venue?.id || !/^\d{1,32}$/.test(venue.id)) return venue;
+    const known = this.venues.get(venue.id);
+    if (!known) {
+      void this.lookUpVenue(league, venue.id);
+      return venue;
+    }
+    if (known.indoor === null && known.grass === null) return venue;
+    return { ...venue, indoor: venue.indoor ?? known.indoor, grass: venue.grass ?? known.grass };
+  }
+
+  /** Reads a venue once, in the background, and remembers the answer even when it is nothing. */
+  private async lookUpVenue(league: LeagueId, id: string): Promise<void> {
+    if (this.venuesInFlight.has(id)) return;
+    this.venuesInFlight.add(id);
+    try {
+      const url = `https://sports.core.api.espn.com/v2/sports/football/leagues/${league === 'nfl' ? 'nfl' : 'college-football'}/venues/${id}`;
       const res = await this.fetcher.getJson<unknown>(url);
       // A venue that could not be read is remembered as unknown, so it is not asked for again on every poll.
       const doc = res.ok ? obj(res.data) : null;
-      this.venues.set(venue.id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null });
+      this.venues.set(id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null });
+    } catch {
+      this.venues.set(id, { indoor: null, grass: null });
+    } finally {
+      this.venuesInFlight.delete(id);
     }
-    const known = this.venues.get(venue.id)!;
-    if (known.indoor === null && known.grass === null) return venue;
-    return { ...venue, indoor: venue.indoor ?? known.indoor, grass: venue.grass ?? known.grass };
   }
 
   // ------------------------------------------------------------ cache

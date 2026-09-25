@@ -53,6 +53,8 @@ export interface FieldProbe {
    * provider did not report rain or snow for, and that is most of them.
    */
   sky: { kind: string; night: boolean; indoor: boolean; drops: number } | null;
+  /** How much of the far end of the field the air has taken, 0 when the sky is clear or unreported. */
+  haze: number;
   /** The team whose mark is painted at the fifty, which is the home team's. */
   midfield: string | null;
   /** How loudly the stands are answering, 0 when they are not, and what they are answering. */
@@ -82,6 +84,7 @@ export const fieldProbe: FieldProbe = {
   midfield: null,
   drive: null,
   sky: null,
+  haze: 0,
   cheer: 0,
   cheerFor: null,
 };

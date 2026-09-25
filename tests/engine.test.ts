@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameDetail, GameSummary, LeagueId, LineHistory } from '../shared/model';
-import { GridironEngine, type ClientInterest, type EngineMessage } from '../server/engine';
+import { FORGET_GAME_AFTER_MS, GridironEngine, type ClientInterest, type EngineMessage } from '../server/engine';
 import type { DetailResult, SlateResult, SportsProvider } from '../server/providers/types';
 import { bettingLines, detail, game, play } from './helpers/builders';
 
@@ -248,6 +248,41 @@ describe('GridironEngine', () => {
     expect(served.points).toHaveLength(1);
     // Nothing stamped with today, which is what recording here would have added.
     expect(served.points.every((p) => p.at.startsWith('2026-09-13'))).toBe(true);
+  });
+
+  /*
+   * A server left up for a season would otherwise hold every game it had ever
+   * been asked for: the detail, the two versions kept for deltas, the price
+   * history and the recorded line. A game still being polled is never dropped
+   * however long ago somebody asked for it, which is what keeps a followed game
+   * safe; one nobody has asked about in two hours goes.
+   */
+  it('forgets everything held for a game nobody has asked about, and nothing held for one still being polled', async () => {
+    const f = fakeProvider();
+    const held = game({ id: 'nfl-8', kind: 'final', lines: bettingLines(-3.5, 47.5, -180, 155) });
+    const watched = game({ id: 'nfl-9', lines: bettingLines(-3.5, 47.5, -180, 155) });
+    f.setSlate(async (league) => ({ games: league === 'nfl' ? [held, watched] : [] }));
+    f.setDetail(async (id) => ({ ok: true, detail: detail(id === 'nfl-8' ? held : watched, [play({ n: 1, gameId: id })]), receivedAt: Date.now() }));
+    const e = make(f.provider);
+    e.connect('a', interest({ focus: ['nfl-8', 'nfl-9'] }), () => {});
+    await e.refreshDetail('nfl-8');
+    await e.refreshDetail('nfl-9');
+    const before = e.stats().details;
+    expect(before).toBe(2);
+
+    // Nobody is following nfl-8 any more; nfl-9 is still focused, so it keeps its task.
+    e.connect('a', interest({ focus: ['nfl-9'] }), () => {});
+    await vi.advanceTimersByTimeAsync(FORGET_GAME_AFTER_MS + 60_000);
+    const ids = e.stats().tasks.map((t) => t.key);
+    expect(ids.some((k) => k.startsWith('detail|nfl-9'))).toBe(true);
+    expect(ids.some((k) => k.startsWith('detail|nfl-8'))).toBe(false);
+    // One held, one dropped, and with it its price history and its recorded line.
+    expect(e.stats().details).toBe(1);
+    // The one still followed is untouched: a newcomer is still sent its whole detail.
+    const seen: EngineMessage[] = [];
+    e.connect('b', interest({ focus: ['nfl-9'] }), (m) => seen.push(m));
+    await vi.advanceTimersByTimeAsync(0);
+    expect((seen.find((m) => m.type === 'detail') as Extract<EngineMessage, { type: 'detail' }>).detail.gameId).toBe('nfl-9');
   });
 
   it("keeps polling yesterday while one of its games runs past midnight, then lets it go", async () => {

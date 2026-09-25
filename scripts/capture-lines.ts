@@ -43,7 +43,11 @@ const flag = (name: string): string | null => {
 const has = (name: string) => argv.includes(`--${name}`);
 const everyMs = Math.max(10, Number(flag('every') ?? 20)) * 1000;
 const until = flag('until') ? Date.parse(flag('until')!) : null;
-const league = (flag('league') as LeagueId | null) ?? 'nfl';
+const askedLeague = flag('league');
+if (askedLeague !== null && askedLeague !== 'nfl' && askedLeague !== 'cfb') throw new Error(`--league must be nfl or cfb, not ${askedLeague}. It names a file to write and a path to fetch.`);
+const league: LeagueId = askedLeague ?? 'nfl';
+const askedDate = flag('date');
+if (askedDate !== null && !/^\d{8}$/.test(askedDate)) throw new Error(`--date must be YYYYMMDD, not ${askedDate}.`);
 
 const fetcher = new ProviderFetcher();
 const path = (l: LeagueId) => (l === 'nfl' ? 'nfl' : 'college-football');
@@ -63,8 +67,7 @@ interface Watched {
 /** The games to watch: named on the command line, or everything live or on a date. */
 async function discover(): Promise<Watched[]> {
   const named = argv.filter((a) => !a.startsWith('--') && parseGameId(a));
-  const date = flag('date');
-  const url = `https://site.api.espn.com/apis/site/v2/sports/football/${path(league)}/scoreboard?limit=500${date ? `&dates=${date}` : ''}`;
+  const url = `https://site.api.espn.com/apis/site/v2/sports/football/${path(league)}/scoreboard?limit=500${askedDate ? `&dates=${askedDate}` : ''}`;
   const res = await fetcher.getJson<Raw>(url);
   if (!res.ok) throw new Error(`Scoreboard could not be read: ${res.error}`);
   const out: Watched[] = [];
@@ -104,6 +107,8 @@ async function discover(): Promise<Watched[]> {
 
 /** One file per league and provider day, beside the exchange's captures. */
 function fileFor(l: LeagueId, dateKey: string) {
+  // Both halves name a file. The league is checked at startup; the date comes from the provider, so it is checked here.
+  if (!/^\d{8}$/.test(dateKey)) throw new Error(`Refusing to write a recording for a date key that is not YYYYMMDD: ${dateKey}`);
   return join(ROOT, 'fixtures', 'lines', `${l}-${dateKey}.json`);
 }
 
@@ -147,7 +152,9 @@ async function main() {
     let wrote = 0;
     await Promise.all(
       games.map(async (g) => {
-        const res = await fetcher.getJson<unknown>(coreOddsUrl(g.league, g.providerEventId));
+        const url = coreOddsUrl(g.league, g.providerEventId);
+        if (!url) return;
+        const res = await fetcher.getJson<unknown>(url);
         if (!res.ok) return;
         const lines = normalizeCoreOdds(res.data, g.homeId, g.awayId);
         if (!lines) return;

@@ -1,15 +1,15 @@
 {
-  "recordedAt": "2026-09-24T21:01:30.146Z",
+  "recordedAt": "2026-09-24T23:23:15.736Z",
   "environment": "Production build, replay mode, game page at 1440x900 with drive replay playing and camera presets cycling",
   "info": {
     "calls": 34,
-    "triangles": 4224,
+    "triangles": 4210,
     "geometries": 28,
     "textures": 14,
     "programs": 15,
     "views": 1,
     "dpr": 1,
-    "frameMs": 0.82,
+    "frameMs": 0.72,
     "frames": 245
   }
 }

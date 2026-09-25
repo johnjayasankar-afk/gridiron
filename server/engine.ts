@@ -49,6 +49,9 @@ export interface PollIntervals {
   detailFinal: number;
 }
 
+/** How long a game nobody has asked about is kept before everything held for it is dropped. */
+export const FORGET_GAME_AFTER_MS = 2 * 60 * 60_000;
+
 export const DEFAULT_INTERVALS: PollIntervals = {
   slateLive: 25_000,
   slateIdle: 5 * 60_000,
@@ -890,6 +893,35 @@ export class GridironEngine {
     // forget days nobody has asked about for a while
     const active = this.activeDates();
     for (const [date, day] of this.days) if (!active.has(date) && this.now() - day.lastRequested > 30 * 60_000) this.days.delete(date);
+    this.forgetIdleGames();
+  }
+
+  /*
+   * Forget a game nobody has asked about for a long time, along with everything
+   * held for it.
+   *
+   * A day is forgotten when nobody looks at it, but the per game state was not:
+   * the detail, the two previous versions kept for deltas, the exchange's price
+   * history and the recorded sportsbook line all stayed for every game the
+   * process had ever been asked for. A season is a few hundred NFL games and the
+   * better part of a thousand college ones, and a detail is not small, so a
+   * server left up from September to January was holding all of them. A game
+   * still being polled has a task and is never forgotten however long ago
+   * somebody last asked for it, which is what keeps a followed game safe.
+   */
+  private forgetIdleGames() {
+    const polled = new Set<GameId>();
+    for (const key of this.tasks.keys()) {
+      const [kind, id] = key.split('|');
+      if (kind === 'detail') polled.add(id);
+    }
+    for (const [id, entry] of this.details) {
+      if (polled.has(id) || entry.inflight || this.now() - entry.lastRequested <= FORGET_GAME_AFTER_MS) continue;
+      this.details.delete(id);
+      this.histories.delete(id);
+      this.lines.delete(id);
+      this.lastPush.delete(id);
+    }
   }
 
   private schedule(task: Task, delayMs: number) {

@@ -481,6 +481,39 @@ export const sparkTexture = () =>
     64,
   ));
 
+let rainDrop: THREE.CanvasTexture | null = null;
+
+/**
+ * One falling drop, as a streak.
+ *
+ * A point sprite is a screen-aligned square and `gl_PointSize` is one number, so
+ * a drop cannot be made tall by scaling: it only becomes a bigger square. Rain
+ * reads as rain because each drop is elongated along its fall, so the shape is
+ * in the texture, brightest along a thin vertical core and fading to nothing at
+ * both ends so a drop has no cut edge at either end of its streak.
+ */
+export const rainTexture = () => {
+  if (rainDrop) return rainDrop;
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  const along = ctx.createLinearGradient(0, 0, 0, 64);
+  along.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  along.addColorStop(0.3, 'rgba(255, 255, 255, 0.85)');
+  along.addColorStop(0.75, 'rgba(255, 255, 255, 1)');
+  along.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = along;
+  // Narrow, and soft at its sides, so the streak is a line of water and not a bar.
+  ctx.filter = 'blur(1.5px)';
+  ctx.fillRect(6, 0, 4, 64);
+  ctx.filter = 'none';
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  rainDrop = texture;
+  return texture;
+};
+
 // ---------------------------------------------------------------- the ball's own skin
 
 /*
