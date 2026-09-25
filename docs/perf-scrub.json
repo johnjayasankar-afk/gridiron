@@ -1,0 +1,87 @@
+{
+  "recordedAt": "2026-09-25T14:00:17.867Z",
+  "environment": "Production build, game page at 1440x900, the scrubber dragged across a 149 play game in 41 steps at 60ms apart, twice",
+  "first": {
+    "count": 186,
+    "median": 16.7,
+    "p95": 17.8,
+    "p99": 53.3,
+    "worst": 122.9,
+    "over32": 3,
+    "rough": [
+      {
+        "at": 0,
+        "ms": 35.1
+      },
+      {
+        "at": 1,
+        "ms": 53.3
+      },
+      {
+        "at": 2,
+        "ms": 122.9
+      }
+    ]
+  },
+  "second": {
+    "count": 178,
+    "median": 16.7,
+    "p95": 33,
+    "p99": 42.2,
+    "worst": 42.4,
+    "over32": 10,
+    "rough": [
+      {
+        "at": 51,
+        "ms": 33.7
+      },
+      {
+        "at": 58,
+        "ms": 40.2
+      },
+      {
+        "at": 61,
+        "ms": 33.9
+      },
+      {
+        "at": 64,
+        "ms": 39.8
+      },
+      {
+        "at": 67,
+        "ms": 33.4
+      },
+      {
+        "at": 70,
+        "ms": 33
+      },
+      {
+        "at": 73,
+        "ms": 42.2
+      },
+      {
+        "at": 80,
+        "ms": 33
+      },
+      {
+        "at": 83,
+        "ms": 42.4
+      },
+      {
+        "at": 86,
+        "ms": 33.2
+      }
+    ]
+  },
+  "info": {
+    "calls": 38,
+    "triangles": 3970,
+    "geometries": 28,
+    "textures": 14,
+    "programs": 15,
+    "views": 1,
+    "dpr": 1,
+    "frameMs": 1.18,
+    "frames": 365
+  }
+}

@@ -19,13 +19,13 @@ import { openReplay } from './helpers';
 
 /** A route, the address it lives at, and something only that view draws. */
 const ROUTES = [
-  { name: 'slate', path: '/', shows: '.section-live, .state-block, .slate-empty' },
-  { name: 'focus', path: '/focus', shows: '.focus-view, .state-block' },
-  { name: 'wall', path: '/wall', shows: '.wall-view, .state-block' },
-  { name: 'tape', path: '/tape', shows: '.tape-view, .state-block' },
-  { name: 'a game', path: '/game/nfl-401872925', shows: '.scoreboard' },
-  { name: 'a team', path: '/team/nfl-2', shows: '.team-view, .state-block' },
-  { name: 'an unknown address', path: '/no-such-page', shows: '.state-block' },
+  { name: 'the slate', path: '/', shows: '.section-live .card, .state-block', title: /Gridiron/ },
+  { name: 'focus', path: '/focus', shows: '.focus-slot, .state-block', title: /^Focus · Gridiron$/ },
+  { name: 'the wall', path: '/wall', shows: '.wall-grid, .state-block', title: /^Wall · Gridiron$/ },
+  { name: 'the tape', path: '/tape', shows: '.tape-lane, .state-block', title: /^Tape · Gridiron$/ },
+  { name: 'a game', path: '/game/nfl-401872925', shows: '.scoreboard', title: /· Gridiron$/ },
+  { name: 'a team', path: '/team/nfl-2', shows: 'table, .state-block', title: /· Gridiron$/ },
+  { name: 'an unknown address', path: '/no-such-page', shows: '.state-block', title: /^Page not found · Gridiron$/ },
 ] as const;
 
 /** Console errors worth failing on. A provider request that 404s is the page's business, not a defect here. */
@@ -54,6 +54,11 @@ test.describe('every address', () => {
       await page.goto(`${route.path}?replay=nfl-week1-sunday&at=0.85&paused=1`);
       await expect(page.locator(route.shows).first()).toBeVisible({ timeout: 25_000 });
       await expect(page.locator('.view-error'), 'the view boundary replaced the page').toHaveCount(0);
+      /*
+       * And it names itself in the tab. The tape did not, so opening it from a
+       * game left the tab reading that game's score while the tape was on screen.
+       */
+      await expect(page).toHaveTitle(route.title, { timeout: 15_000 });
       expect(noise, `${route.name} logged an error`).toEqual([]);
     });
   }

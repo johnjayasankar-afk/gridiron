@@ -14,7 +14,7 @@
  * probability made, and the page says so.
  */
 import { Radio } from 'lucide-react';
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { scoreText, statusShort } from '../../shared/format';
 import { periodShort } from '../../shared/util';
 import type { GameSummary } from '../../shared/model';
@@ -96,6 +96,11 @@ export function TapeView() {
   const wall = useNow(1000);
   const { ref: axisRef, node: axisNode, width, left } = useBand();
   const [scrubAt, setScrubAt] = useState<number | null>(null);
+
+  // The one view that never named itself, so opening it from a game left the tab reading that game's score.
+  useEffect(() => {
+    document.title = 'Tape · Gridiron';
+  }, []);
 
   const all = useMemo(() => order.map((id) => tracks[id]).filter(Boolean) as TapeTrack[], [order, tracks]);
   const byId = useMemo(() => new Map(model.all.map((g) => [g.id, g])), [model.all]);

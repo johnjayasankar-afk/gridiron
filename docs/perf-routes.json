@@ -1,0 +1,42 @@
+{
+  "recordedAt": "2026-09-25T14:00:10.706Z",
+  "environment": "Production build over a local server, so no network latency is included. Cold is a fresh context with an empty cache; warm is the same context a second time. Replay mode, paused, 1440x900.",
+  "rows": [
+    {
+      "route": "slate",
+      "coldMs": 252,
+      "warmMs": 221,
+      "warmTransferKB": 66
+    },
+    {
+      "route": "focus",
+      "coldMs": 243,
+      "warmMs": 170,
+      "warmTransferKB": 66
+    },
+    {
+      "route": "wall",
+      "coldMs": 217,
+      "warmMs": 137,
+      "warmTransferKB": 66
+    },
+    {
+      "route": "tape",
+      "coldMs": 481,
+      "warmMs": 425,
+      "warmTransferKB": 66
+    },
+    {
+      "route": "game",
+      "coldMs": 499,
+      "warmMs": 463,
+      "warmTransferKB": 66
+    },
+    {
+      "route": "team",
+      "coldMs": 495,
+      "warmMs": 416,
+      "warmTransferKB": 68
+    }
+  ]
+}

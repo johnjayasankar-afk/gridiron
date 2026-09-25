@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-25T08:57:00.294Z",
+  "recordedAt": "2026-09-25T13:59:53.849Z",
   "environment": "Production build, replay mode, game page at 1440x900 with drive replay playing and camera presets cycling",
   "field": {
     "venue": "NO 24, DET 31 · OT 4:57 · Gridiron",
@@ -8,13 +8,13 @@
   },
   "info": {
     "calls": 37,
-    "triangles": 4298,
+    "triangles": 4310,
     "geometries": 31,
     "textures": 14,
     "programs": 15,
     "views": 1,
     "dpr": 1,
-    "frameMs": 0.73,
-    "frames": 241
+    "frameMs": 0.78,
+    "frames": 243
   }
 }
