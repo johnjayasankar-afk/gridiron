@@ -312,6 +312,20 @@ export interface MarketHistory {
   captured: boolean;
 }
 
+/**
+ * The provider's own photograph of a venue, as it lists it. The address is never
+ * built by hand: the provider publishes an array of them and only what is in it
+ * is used, because guessing a URL that happens to answer is not the same as
+ * being told where the picture is.
+ */
+export interface VenueImage {
+  href: string;
+  width: number;
+  height: number;
+  /** True for a picture taken inside the bowl rather than of the outside of the building. */
+  interior: boolean;
+}
+
 export interface GameSummary {
   id: GameId;
   league: LeagueId;
@@ -332,7 +346,7 @@ export interface GameSummary {
    * unknown, which is not the same as false, so both are nullable and a field
    * lit or painted from them only changes when they are actually reported.
    */
-  venue: { id: string | null; name: string | null; city: string | null; state: string | null; indoor: boolean | null; grass: boolean | null } | null;
+  venue: { id: string | null; name: string | null; city: string | null; state: string | null; indoor: boolean | null; grass: boolean | null; image: VenueImage | null; capacity: number | null } | null;
   /** The weather the provider reports at the venue. Absent indoors and for some games. */
   weather?: GameWeather | null;
   neutralSite: boolean | null;

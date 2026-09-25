@@ -3324,6 +3324,37 @@ button.pbp-row:hover {
   text-transform: uppercase;
 }
 
+/*
+ * The provider's photograph of the arena. It holds its own aspect ratio from the
+ * dimensions the provider gives, so the tab does not jump when a one to three
+ * megabyte picture finally lands, and it is dimmed a little and rimmed like
+ * every other surface so a photograph does not sit on this interface as a bright
+ * rectangle pasted onto it.
+ */
+.venue-photo {
+  margin: 0 0 14px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border);
+  background: var(--surface);
+}
+
+.venue-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  filter: saturate(0.82) brightness(0.86);
+}
+
+.venue-photo figcaption {
+  padding: 10px 16px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));

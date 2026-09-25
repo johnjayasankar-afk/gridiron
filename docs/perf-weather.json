@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-24T23:23:24.358Z",
+  "recordedAt": "2026-09-25T03:58:19.473Z",
   "environment": "Production build, replay mode, game page at 1440x900 with snow falling (test-weather synthetic scenario)",
   "info": {
     "calls": 36,
@@ -9,12 +9,12 @@
     "programs": 17,
     "views": 1,
     "dpr": 1,
-    "frameMs": 0.55,
-    "frames": 438
+    "frameMs": 0.58,
+    "frames": 439
   },
   "frames": {
     "count": 240,
-    "p50": 16.599999997764826,
-    "p99": 18.800000000745058
+    "p50": 16.600000001490116,
+    "p99": 18.700000002980232
   }
 }

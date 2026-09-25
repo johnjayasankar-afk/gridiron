@@ -425,6 +425,57 @@ test.describe('the sky over the field', () => {
     expect(errors, 'a shader patch stopped applying').toEqual([]);
   });
 
+  /*
+   * A roof is three more things to draw, so that is what is asserted rather than
+   * the flag that asked for them. Reading `sky.indoor` back would only prove the
+   * provider said indoors and the field agreed, which is the mistake the haze
+   * test made: it would pass with the roof deleted.
+   */
+  test('a venue the provider says has a roof is given one, and one without is not', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const draws = async () => {
+      await expect.poll(() => page.evaluate(() => !!window.__gridironField), { timeout: 20_000 }).toBe(true);
+      await expect.poll(async () => (await page.evaluate(() => window.__gridironGraphics?.info()))?.calls ?? 0, { timeout: 15_000 }).toBeGreaterThan(20);
+      return (await page.evaluate(() => window.__gridironGraphics?.info()))!.calls;
+    };
+
+    await openReplay(page, { path: '/game/nfl-401872925', scenario: 'test-indoors', at: 0.4 });
+    const roofed = await draws();
+    expect(await page.evaluate(() => window.__gridironField!().sky!.indoor)).toBe(true);
+    // Nothing falls indoors, and the field says so in words a screen reader gets.
+    expect(await page.evaluate(() => window.__gridironField!().sky!.drops)).toBe(0);
+    await expect(page.locator('.sit-note')).toContainText('The venue has a roof');
+
+    await openReplay(page, { path: '/game/nfl-401872925', scenario: 'nfl-week1-sunday', at: 0.4 });
+    const open = await draws();
+    expect(await page.evaluate(() => window.__gridironField!().sky)).toBeNull();
+
+    // The deck, its ribs and the membrane over the field: three more draws than the same game under the sky.
+    expect(roofed - open, 'the roof was not drawn').toBeGreaterThanOrEqual(3);
+    expect(errors, 'drawing the roof logged an error').toEqual([]);
+  });
+
+  test('the scorebug carries the state of the down, on the field', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openReplay(page, { path: '/game/nfl-401872926', at: 0.55 });
+    const bug = page.locator('.score-bug');
+    await expect(bug).toBeVisible();
+    await expect(bug).toContainText('ARI');
+    await expect(bug).toContainText('LAC');
+    // Whoever the provider says has the ball has their row lit, and only one row is.
+    await expect(bug.locator('.bug-team.has-ball')).toHaveCount(1);
+    await expect(bug.locator('.bug-down')).toContainText(/\d(st|nd|rd|th) &/);
+    /*
+     * It sits above the shared canvas. Below it the field draws over the bug and
+     * the whole thing vanishes, which is exactly what happened the first time.
+     */
+    const overlay = await bug.evaluate((el) => Number(getComputedStyle(el).zIndex));
+    const canvas = await page.locator('canvas').first().evaluate((el) => Number(getComputedStyle(el).zIndex) || 0);
+    expect(overlay).toBeGreaterThan(canvas);
+  });
+
   test('a game the provider reported no weather for is lit exactly as it always was', async ({ page }) => {
     await openGame(page, 0.5);
     expect(await page.evaluate(() => window.__gridironField!().sky)).toBeNull();

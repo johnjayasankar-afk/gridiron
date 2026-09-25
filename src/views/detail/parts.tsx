@@ -5,6 +5,7 @@ import { describeProgress } from '../../../shared/field';
 import { downDistance, spotLabel, teamFor } from '../../../shared/format';
 import type { BallSpot, GameDetail, GameLeader, GameSummary, LeaderAthlete, Side, Situation } from '../../../shared/model';
 import { skyFor, skyLabel } from '../../../shared/sky';
+import { VenuePhoto } from './VenuePhoto';
 import { DIVISION_LABEL, isLiveOrPaused } from '../../../shared/model';
 import { driveResultLabel, inspectablePlays, type CatchUpSummary, type PlayFrame } from '../../../shared/replayFrames';
 import { periodLong, periodShort } from '../../../shared/util';
@@ -383,8 +384,11 @@ export function StatsTable({ detail, game }: { detail: GameDetail; game: GameSum
 
 export function GameInfo({ game, detail }: { game: GameSummary; detail: GameDetail | null }) {
   const venue = game.venue ? [game.venue.name, [game.venue.city, game.venue.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ') : null;
+  const sky = skyFor(game.weather, game.venue?.indoor);
   return (
-    <dl className="info-grid">
+    <>
+      {game.venue && <VenuePhoto venue={game.venue} />}
+      <dl className="info-grid">
       <div>
         <dt>Kickoff</dt>
         <dd>{game.startTime ? new Date(game.startTime).toLocaleString(undefined, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not reported'}</dd>
@@ -397,6 +401,28 @@ export function GameInfo({ game, detail }: { game: GameSummary; detail: GameDeta
         <dt>Venue</dt>
         <dd>{venue ?? 'Not reported'}{game.neutralSite ? ' · neutral site' : ''}</dd>
       </div>
+      {/* Both are the provider's own flags, and both change how the field is drawn, so both are stated rather than only acted on. */}
+      {game.venue?.grass !== null && game.venue?.grass !== undefined && (
+        <div>
+          <dt>Surface</dt>
+          <dd>{game.venue.grass ? 'Grass' : 'Synthetic'}</dd>
+        </div>
+      )}
+      {game.venue?.indoor !== null && game.venue?.indoor !== undefined && (
+        <div>
+          <dt>Roof</dt>
+          <dd>{game.venue.indoor ? 'Indoors' : 'Open air'}</dd>
+        </div>
+      )}
+      {sky && !sky.indoor && (
+        <div>
+          <dt>Weather</dt>
+          <dd>
+            {skyLabel(sky) ?? 'Reported'}
+            {sky.night ? ' · after dark' : ''}
+          </dd>
+        </div>
+      )}
       {detail?.attendance != null && (
         <div>
           <dt>Attendance</dt>
@@ -436,6 +462,7 @@ export function GameInfo({ game, detail }: { game: GameSummary; detail: GameDeta
           <span className="muted"> · Gridiron does not stream video or link to streams.</span>
         </dd>
       </div>
-    </dl>
+      </dl>
+    </>
   );
 }

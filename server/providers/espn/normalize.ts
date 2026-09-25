@@ -50,12 +50,38 @@ import { ADMIN_KINDS, TOUCHDOWN_KINDS, UNKNOWN_SPOT, gameId as toGameId, isLiveO
 import { labelFromProgress, progressFromSchematicYard, type Side, type SpotProvenance } from '../../../shared/field.js';
 import { clockToSeconds, fingerprint } from '../../../shared/util.js';
 import { classifyPlayType, parseConversion, parseReview } from './classify.js';
-import { lastPlayWinProbability, latestWinProbability, normalizeLines, normalizePredictor, normalizeWeather, normalizeWinProbability } from './odds.js';
+import { lastPlayWinProbability, latestWinProbability, normalizeLines, normalizePredictor, normalizeVenueImage, normalizeWeather, normalizeWinProbability } from './odds.js';
 import { arr, at, bool, hexColor, num, obj, safeUrl, str } from './raw.js';
+import { VENUE_CAPACITIES } from '../../../shared/venues.js';
 
 export const PROVIDER_NAME = 'ESPN';
 export const SITE_BASE = 'https://site.api.espn.com/apis/site/v2/sports/football';
 export const RESULT_LIMIT = 500;
+
+/**
+ * How many people a venue holds, from the checked-in reference table.
+ *
+ * It is applied here rather than on the detail path so every summary carries it,
+ * which means a card, a replay and a game page all draw the same sized bowl. A
+ * stadium's capacity does not change between polls, or between a live game and a
+ * replay of it, so there is nothing to look up and nothing to wait for.
+ */
+const CAPACITIES = new Map(VENUE_CAPACITIES.map((v) => [v.espnId, v.capacity]));
+/*
+ * By id first, and by name where there is no id.
+ *
+ * The provider did not always publish a venue id: captured scoreboards from
+ * before it did name their venues and identify them with nothing. Falling back
+ * to the name is safe here in a way a fuzzy match never is, because both strings
+ * are the provider's own `fullName` for the same place, so the comparison is
+ * exact rather than approximate. It is still only taken when the name belongs to
+ * exactly one venue in the table, which a test holds.
+ */
+const BY_NAME = new Map(VENUE_CAPACITIES.map((v) => [v.name, v.capacity]));
+const capacityFor = (venueId: string | null, name: string | null): number | null => {
+  if (venueId) return CAPACITIES.get(venueId) ?? null;
+  return name ? (BY_NAME.get(name) ?? null) : null;
+};
 
 export const espnLeaguePath = (league: LeagueId) => (league === 'nfl' ? 'nfl' : 'college-football');
 
@@ -429,7 +455,7 @@ export function normalizeScoreboardEvent(
     situation,
     broadcasts: normalizeBroadcasts(comp),
     venue: venue
-      ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')), indoor: bool(venue.indoor), grass: bool(venue.grass) }
+      ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')), indoor: bool(venue.indoor), grass: bool(venue.grass), image: normalizeVenueImage(venue.images), capacity: capacityFor(str(venue.id), str(venue.fullName)) }
       : null,
     // The weather at the venue, as reported. A roofed venue has none, which is the roof saying so.
     weather: normalizeWeather(e.weather),
@@ -818,7 +844,7 @@ export function normalizeSummary(
         : null),
     broadcasts: normalizeBroadcasts(comp),
     venue: venue
-      ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')), indoor: bool(venue.indoor), grass: bool(venue.grass) }
+      ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, 'address', 'city')), state: str(at(venue, 'address', 'state')), indoor: bool(venue.indoor), grass: bool(venue.grass), image: normalizeVenueImage(venue.images), capacity: capacityFor(str(venue.id), str(venue.fullName)) }
       : null,
     weather: normalizeWeather(at(root, 'header', 'weather') ?? root.weather),
     neutralSite: bool(comp.neutralSite),

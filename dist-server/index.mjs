@@ -427,7 +427,7 @@ function mergeSummaries(prev, next) {
      * its roof or its surface, and taking it wholesale would throw away what the
      * scoreboard and the venue document had already found.
      */
-    venue: next.venue && prev.venue && next.venue.name === prev.venue.name ? { ...next.venue, id: next.venue.id ?? prev.venue.id, indoor: next.venue.indoor ?? prev.venue.indoor, grass: next.venue.grass ?? prev.venue.grass } : next.venue ?? prev.venue,
+    venue: next.venue && prev.venue && next.venue.name === prev.venue.name ? { ...next.venue, id: next.venue.id ?? prev.venue.id, indoor: next.venue.indoor ?? prev.venue.indoor, grass: next.venue.grass ?? prev.venue.grass, image: next.venue.image ?? prev.venue.image, capacity: next.venue.capacity ?? prev.venue.capacity } : next.venue ?? prev.venue,
     weather: next.weather ?? prev.weather,
     coverage: next.source === "summary" && prev.coverage.level !== "unknown" && next.coverage.level === "unknown" ? prev.coverage : next.coverage
   };
@@ -2817,11 +2817,307 @@ function normalizeWeather(raw) {
   if (id === null && temperature === null && !displayValue) return null;
   return { conditionId: id, temperature, displayValue };
 }
+function normalizeVenueImage(raw) {
+  const candidates = arr(raw).map(obj).filter((i) => !!i && typeof i.href === "string" && /^https:\/\//.test(String(i.href)));
+  if (!candidates.length) return null;
+  const rels = (i) => arr(i.rel).map((r) => str(r)).filter((r) => !!r);
+  const chosen = candidates.find((i) => rels(i).includes("interior")) ?? candidates[0];
+  const width = num(chosen.width);
+  const height = num(chosen.height);
+  if (width === null || height === null || width <= 0 || height <= 0) return null;
+  return { href: String(chosen.href), width, height, interior: rels(chosen).includes("interior") };
+}
+
+// shared/venues.ts
+var VENUE_CAPACITIES = [
+  { espnId: "218", name: "Riccardo Silva Stadium", capacity: 2e4, wikidata: "Q1388701" },
+  { espnId: "347", name: "Camp Randall Stadium", capacity: 1e4, wikidata: "Q1029941" },
+  { espnId: "453", name: "Robertson Stadium", capacity: 32e3, wikidata: "Q1632955" },
+  { espnId: "477", name: "Los Angeles Memorial Coliseum", capacity: 77500, wikidata: "Q849784" },
+  { espnId: "538", name: "Dignity Health Sports Park", capacity: 30510, wikidata: "Q200684" },
+  { espnId: "716", name: "Torero Stadium", capacity: 6e3, wikidata: "Q7825672" },
+  { espnId: "717", name: "Villanova Stadium", capacity: 12500, wikidata: "Q7930882" },
+  { espnId: "721", name: "Bobby Dodd Stadium", capacity: 55e3, wikidata: "Q2907951" },
+  { espnId: "844", name: "Stambaugh Stadium", capacity: 20630, wikidata: "Q6587172" },
+  { espnId: "1056", name: "Rose Bowl", capacity: 92542, wikidata: "Q582280" },
+  { espnId: "1930", name: "ICCU Dome", capacity: 12e3, wikidata: "Q5884522" },
+  { espnId: "1964", name: "JMA Wireless Dome", capacity: 49262, wikidata: "Q2739617" },
+  { espnId: "2023", name: "J. Lawrence Walkup Skydome", capacity: 11230, wikidata: "Q7962575" },
+  { espnId: "3453", name: "SeatGeek Stadium", capacity: 2e4, wikidata: "Q999781" },
+  { espnId: "3493", name: "Caesars Superdome", capacity: 75167, wikidata: "Q756452" },
+  { espnId: "3558", name: "Michigan Stadium", capacity: 107601, wikidata: "Q1640118" },
+  { espnId: "3601", name: "Aggie Memorial Stadium", capacity: 30343, wikidata: "Q4692211" },
+  { espnId: "3602", name: "UC Davis Health Stadium", capacity: 10743, wikidata: "Q4692217" },
+  { espnId: "3603", name: "Truist Stadium", capacity: 17500, wikidata: "Q4692215" },
+  { espnId: "3604", name: "Alamodome", capacity: 59e3, wikidata: "Q1618347" },
+  { espnId: "3605", name: "Alerus Center", capacity: 21e3, wikidata: "Q4716244" },
+  { espnId: "3610", name: "Aloha Stadium", capacity: 5e4, wikidata: "Q1697292" },
+  { espnId: "3612", name: "Alumni Memorial Stadium (NC)", capacity: 6e3, wikidata: "Q4737464" },
+  { espnId: "3616", name: "Amon G. Carter Stadium", capacity: 47e3, wikidata: "Q473943" },
+  { espnId: "3617", name: "Andy Kerr Stadium", capacity: 10221, wikidata: "Q4760893" },
+  { espnId: "3620", name: "Armstrong Stadium", capacity: 17e3, wikidata: "Q4793996" },
+  { espnId: "3622", name: "Arrowhead Stadium", capacity: 76416, wikidata: "Q544553" },
+  { espnId: "3623", name: "Arthur J. Rooney Athletic Field", capacity: 2200, wikidata: "Q4799198" },
+  { espnId: "3624", name: "Arute Field", capacity: 5500, wikidata: "Q4802321" },
+  { espnId: "3625", name: "Centennial Bank Stadium", capacity: 30382, wikidata: "Q6541587" },
+  { espnId: "3626", name: "Autzen Stadium", capacity: 53800, wikidata: "Q2873102" },
+  { espnId: "3627", name: "Bailey Memorial Stadium", capacity: 6500, wikidata: "Q4848378" },
+  { espnId: "3628", name: "Bank of America Stadium", capacity: 73778, wikidata: "Q806673" },
+  { espnId: "3629", name: "Barker-Lane Stadium", capacity: 5e3, wikidata: "Q4860992" },
+  { espnId: "3630", name: "Allegacy Federal Credit Union Stadium", capacity: 31500, wikidata: "Q1028275" },
+  { espnId: "3631", name: "Shell Energy Stadium", capacity: 22039, wikidata: "Q176460" },
+  { espnId: "3632", name: "Beaver Stadium", capacity: 106572, wikidata: "Q692816" },
+  { espnId: "3634", name: "Ben Hill Griffin Stadium", capacity: 88548, wikidata: "Q816516" },
+  { espnId: "3646", name: "Boone Pickens Stadium", capacity: 60218, wikidata: "Q2910505" },
+  { espnId: "3649", name: "Bowman Gray Stadium", capacity: 2e4, wikidata: "Q2072723" },
+  { espnId: "3650", name: "Bragg Memorial Stadium", capacity: 25500, wikidata: "Q4955406" },
+  { espnId: "3652", name: "Acrisure Bounce House", capacity: 45323, wikidata: "Q2925356" },
+  { espnId: "3653", name: "Albertsons Stadium", capacity: 36387, wikidata: "Q2926064" },
+  { espnId: "3654", name: "Brooks Stadium (SC)", capacity: 9214, wikidata: "Q4975053" },
+  { espnId: "3655", name: "Brown Field", capacity: 5e3, wikidata: "Q4976141" },
+  { espnId: "3657", name: "Bryant-Denny Stadium", capacity: 101821, wikidata: "Q995161" },
+  { espnId: "3658", name: "Buccaneer Field", capacity: 4e3, wikidata: "Q4982406" },
+  { espnId: "3660", name: "Valley Children's Stadium", capacity: 41031, wikidata: "Q583581" },
+  { espnId: "3661", name: "Beirne Stadium", capacity: 5500, wikidata: "Q4996728" },
+  { espnId: "3664", name: "Bud and Jackie Sellick Bowl", capacity: 5647, wikidata: "Q5002575" },
+  { espnId: "3665", name: "SECU Stadium", capacity: 51802, wikidata: "Q2929171" },
+  { espnId: "3668", name: "Campus Field", capacity: 3334, wikidata: "Q5028640" },
+  { espnId: "3673", name: "Lumen Field", capacity: 67e3, wikidata: "Q612736" },
+  { espnId: "3677", name: "Chuck Noll Field", capacity: 1050, wikidata: "Q5115641" },
+  { espnId: "3679", name: "Huntington Bank Field", capacity: 71516, wikidata: "Q1100756" },
+  { espnId: "3683", name: "Kroger Field", capacity: 61e3, wikidata: "Q517268" },
+  { espnId: "3687", name: "AT&T Stadium", capacity: 9e4, wikidata: "Q838284" },
+  { espnId: "3688", name: "Wildcat Stadium (NH)", capacity: 11015, wikidata: "Q5179652" },
+  { espnId: "3689", name: "Cramton Bowl", capacity: 25e3, wikidata: "Q5181871" },
+  { espnId: "3693", name: "Davis Wade Stadium", capacity: 61337, wikidata: "Q949608" },
+  { espnId: "3694", name: "DeGol Field", capacity: 3450, wikidata: "Q5243905" },
+  { espnId: "3695", name: "Delaware Stadium", capacity: 22e3, wikidata: "Q14685363" },
+  { espnId: "3697", name: "Doak Campbell Stadium", capacity: 79560, wikidata: "Q1233077" },
+  { espnId: "3701", name: "Drake Stadium (IA)", capacity: 14557, wikidata: "Q5305622" },
+  { espnId: "3706", name: "Eccles Coliseum", capacity: 8500, wikidata: "Q5332199" },
+  { espnId: "3710", name: "Ernest W. Spangler Stadium", capacity: 8500, wikidata: "Q5393961" },
+  { espnId: "3711", name: "Estes Stadium", capacity: 9e3, wikidata: "Q5401063" },
+  { espnId: "3713", name: "Falcon Stadium", capacity: 40828, wikidata: "Q907843" },
+  { espnId: "3714", name: "Fargodome", capacity: 26700, wikidata: "Q5435127" },
+  { espnId: "3717", name: "Edwin Fauver Stadium", capacity: 5111, wikidata: "Q110819599" },
+  { espnId: "3718", name: "Tom Benson Hall of Fame Stadium", capacity: 22375, wikidata: "Q5438734" },
+  { espnId: "3719", name: "Northwest Stadium", capacity: 64e3, wikidata: "Q583085" },
+  { espnId: "3720", name: "Finley Stadium", capacity: 20668, wikidata: "Q5450585" },
+  { espnId: "3721", name: "Fisher Stadium", capacity: 13132, wikidata: "Q5454793" },
+  { espnId: "3722", name: "Fitton Field", capacity: 23500, wikidata: "Q5455506" },
+  { espnId: "3724", name: "Floyd Casey Stadium", capacity: 5e4, wikidata: "Q3074454" },
+  { espnId: "3726", name: "Folsom Field", capacity: 26e3, wikidata: "Q3075131" },
+  { espnId: "3727", name: "Ford Field", capacity: 65e3, wikidata: "Q1142586" },
+  { espnId: "3730", name: "Franklin Field", capacity: 7e4, wikidata: "Q5491503" },
+  { espnId: "3734", name: "Gayle and Tom Benson Stadium", capacity: 6200, wikidata: "Q5528824" },
+  { espnId: "3735", name: "Gerald J. Ford Stadium", capacity: 32e3, wikidata: "Q390127" },
+  { espnId: "3737", name: "Gibbs Stadium", capacity: 13e3, wikidata: "Q5558973" },
+  { espnId: "3738", name: "Gillette Stadium", capacity: 68756, wikidata: "Q373355" },
+  { espnId: "3739", name: "Glass Bowl", capacity: 8e3, wikidata: "Q5567033" },
+  { espnId: "3741", name: "Goodman Stadium", capacity: 16e3, wikidata: "Q5583470" },
+  { espnId: "3742", name: "Fortera Stadium", capacity: 1e4, wikidata: "Q5589779" },
+  { espnId: "3744", name: "Hancock Stadium", capacity: 13391, wikidata: "Q14687520" },
+  { espnId: "3746", name: "Hanson Field", capacity: 17168, wikidata: "Q5651191" },
+  { espnId: "3749", name: "Hunter Stadium", capacity: 6e3, wikidata: "Q5658633" },
+  { espnId: "3750", name: "Harvard Stadium", capacity: 30323, wikidata: "Q1587879" },
+  { espnId: "3751", name: "Haskell Memorial Stadium", capacity: 11e3, wikidata: "Q5679213" },
+  { espnId: "3752", name: "Acrisure Stadium", capacity: 65500, wikidata: "Q1067148" },
+  { espnId: "3754", name: "HighPoint.com Stadium", capacity: 41500, wikidata: "Q3453599" },
+  { espnId: "3756", name: "Homer Bryce Stadium", capacity: 14575, wikidata: "Q5889968" },
+  { espnId: "3757", name: "Hornet Stadium", capacity: 21195, wikidata: "Q9004779" },
+  { espnId: "3758", name: "Houck Stadium", capacity: 11015, wikidata: "Q14704317" },
+  { espnId: "3761", name: "Hughes Stadium (CO)", capacity: 32500, wikidata: "Q3490647" },
+  { espnId: "3764", name: "Huskie Stadium", capacity: 23595, wikidata: "Q5949339" },
+  { espnId: "3765", name: "Husky Stadium", capacity: 70083, wikidata: "Q1136463" },
+  { espnId: "3772", name: "Jack Trice Stadium", capacity: 42500, wikidata: "Q3157332" },
+  { espnId: "3774", name: "Phil Simms Stadium", capacity: 1e4, wikidata: "Q6167912" },
+  { espnId: "3775", name: "Joan C. Edwards Stadium", capacity: 38227, wikidata: "Q3179563" },
+  { espnId: "3776", name: "Joe Aillet Stadium", capacity: 23e3, wikidata: "Q6208302" },
+  { espnId: "3777", name: "Joe Walton Stadium", capacity: 3e3, wikidata: "Q6212886" },
+  { espnId: "3781", name: "Johnny Unitas Stadium", capacity: 11198, wikidata: "Q6267813" },
+  { espnId: "3782", name: "Johnson Hagood Stadium", capacity: 11427, wikidata: "Q6268319" },
+  { espnId: "3784", name: "Galaxy Stadium", capacity: 60454, wikidata: "Q3183551" },
+  { espnId: "3785", name: "Jordan-Hare Stadium", capacity: 87451, wikidata: "Q945548" },
+  { espnId: "3786", name: "Kelly/Shorts Stadium", capacity: 32885, wikidata: "Q6385914" },
+  { espnId: "3788", name: "Kenneth P. LaValle Stadium", capacity: 12300, wikidata: "Q6390566" },
+  { espnId: "3792", name: "Kidd Brewer Stadium", capacity: 3e4, wikidata: "Q6404623" },
+  { espnId: "3793", name: "Kinnick Stadium", capacity: 69250, wikidata: "Q3197181" },
+  { espnId: "3795", name: "Kyle Field", capacity: 102733, wikidata: "Q945223" },
+  { espnId: "3798", name: "Lambeau Field", capacity: 80750, wikidata: "Q860790" },
+  { espnId: "3799", name: "Lane Stadium", capacity: 65632, wikidata: "Q3217144" },
+  { espnId: "3801", name: "LaVell Edwards Stadium", capacity: 63470, wikidata: "Q907890" },
+  { espnId: "3803", name: "Legion Field (AL)", capacity: 71594, wikidata: "Q3175504" },
+  { espnId: "3805", name: "Simmons Bank Liberty Stadium", capacity: 50160, wikidata: "Q3237803" },
+  { espnId: "3806", name: "Lincoln Financial Field", capacity: 68532, wikidata: "Q1052370" },
+  { espnId: "3809", name: "Louis Crews Stadium", capacity: 21e3, wikidata: "Q6686944" },
+  { espnId: "3810", name: "Nissan Stadium", capacity: 67700, wikidata: "Q1142992" },
+  { espnId: "3811", name: "Lubbers Stadium", capacity: 10700, wikidata: "Q14716203" },
+  { espnId: "3812", name: "Lucas Oil Stadium", capacity: 62421, wikidata: "Q867160" },
+  { espnId: "3814", name: "M&T Bank Stadium", capacity: 71008, wikidata: "Q1141336" },
+  { espnId: "3815", name: "M. M. Roberts Stadium", capacity: 36e3, wikidata: "Q3272445" },
+  { espnId: "3816", name: "Mackay Stadium", capacity: 3e4, wikidata: "Q6588235" },
+  { espnId: "3817", name: "Malone Stadium", capacity: 30427, wikidata: "Q6744512" },
+  { espnId: "3819", name: "Bowditch Field", capacity: 5800, wikidata: "Q4950749" },
+  { espnId: "3820", name: "Martin Stadium", capacity: 32740, wikidata: "Q2409690" },
+  { espnId: "3824", name: "Meade Stadium", capacity: 6555, wikidata: "Q6803179" },
+  { espnId: "3825", name: "DATCU Stadium", capacity: 30850, wikidata: "Q11597" },
+  { espnId: "3826", name: "Memorial Field (Dartmouth)", capacity: 13e3, wikidata: "Q6815406" },
+  { espnId: "3830", name: "Memorial Stadium (Bloomington, IN)", capacity: 52929, wikidata: "Q3305509" },
+  { espnId: "3831", name: "California Memorial Stadium", capacity: 62467, wikidata: "Q1026837" },
+  { espnId: "3833", name: "David Booth Kansas Memorial Stadium", capacity: 50071, wikidata: "Q3305513" },
+  { espnId: "3839", name: "MetLife Stadium", capacity: 82500, wikidata: "Q10862290" },
+  { espnId: "3841", name: "Michie Stadium", capacity: 38e3, wikidata: "Q3311487" },
+  { espnId: "3842", name: "Milan Puskar Stadium", capacity: 6e4, wikidata: "Q1179474" },
+  { espnId: "3847", name: "Cooper Field", capacity: 3750, wikidata: "Q6934411" },
+  { espnId: "3851", name: "Mustang Stadium", capacity: 11075, wikidata: "Q4717024" },
+  { espnId: "3853", name: "Neyland Stadium", capacity: 102455, wikidata: "Q1984022" },
+  { espnId: "3854", name: "Nippert Stadium", capacity: 4e4, wikidata: "Q3342107" },
+  { espnId: "3855", name: "Notre Dame Stadium", capacity: 80232, wikidata: "Q847043" },
+  { espnId: "3856", name: "Nottingham Field", capacity: 6500, wikidata: "Q7063639" },
+  { espnId: "3858", name: "O'Brien Field", capacity: 7500, wikidata: "Q7071671" },
+  { espnId: "3861", name: "Ohio Stadium", capacity: 102780, wikidata: "Q774694" },
+  { espnId: "3862", name: "O'Kelly-Riddick Stadium", capacity: 1e4, wikidata: "Q7071851" },
+  { espnId: "3864", name: "Oliver C. Dawson Stadium", capacity: 22e3, wikidata: "Q6587322" },
+  { espnId: "3868", name: "Paladin Stadium", capacity: 16e3, wikidata: "Q7126368" },
+  { espnId: "3873", name: "L&N Federal Credit Union Stadium", capacity: 55e3, wikidata: "Q3362725" },
+  { espnId: "3874", name: "Paycor Stadium", capacity: 65515, wikidata: "Q1632294" },
+  { espnId: "3876", name: "Peden Stadium", capacity: 24e3, wikidata: "Q7159081" },
+  { espnId: "3877", name: "Pioneer Stadium", capacity: 5e3, wikidata: "Q7196797" },
+  { espnId: "3879", name: "TowneBank Stadium", capacity: 4200, wikidata: "Q7227362" },
+  { espnId: "3882", name: "Provost Umphrey Stadium", capacity: 15367, wikidata: "Q7252818" },
+  { espnId: "3883", name: "Highmark Stadium (Old)", capacity: 71608, wikidata: "Q1475645" },
+  { espnId: "3886", name: "Raymond James Stadium", capacity: 65890, wikidata: "Q1141343" },
+  { espnId: "3887", name: "Donald W. Reynolds Razorback Stadium", capacity: 72e3, wikidata: "Q1124181" },
+  { espnId: "3889", name: "Reinhart Field", capacity: 1500, wikidata: "Q15272276" },
+  { espnId: "3891", name: "Reliant Stadium", capacity: 71054, wikidata: "Q1058864" },
+  { espnId: "3892", name: "Pratt & Whitney Stadium", capacity: 4e4, wikidata: "Q3113144" },
+  { espnId: "3893", name: "Reser Stadium", capacity: 45674, wikidata: "Q782386" },
+  { espnId: "3894", name: "Rhodes Stadium", capacity: 11250, wikidata: "Q6587840" },
+  { espnId: "3895", name: "Rice Stadium", capacity: 47e3, wikidata: "Q1857419" },
+  { espnId: "3897", name: "Richardson Stadium (Davidson, NC)", capacity: 6e3, wikidata: "Q7330349" },
+  { espnId: "3908", name: "Roy Kidd Stadium", capacity: 22e3, wikidata: "Q7373032" },
+  { espnId: "3909", name: "Roy Stewart Stadium", capacity: 16800, wikidata: "Q7373407" },
+  { espnId: "3912", name: "Rynearson Stadium", capacity: 30200, wikidata: "Q14716273" },
+  { espnId: "3913", name: "Saluki Stadium", capacity: 15e3, wikidata: "Q7406284" },
+  { espnId: "3914", name: "Sam Boyd Stadium", capacity: 36800, wikidata: "Q3470457" },
+  { espnId: "3917", name: "Sanford Stadium", capacity: 92746, wikidata: "Q2221660" },
+  { espnId: "3919", name: "Scheumann Stadium", capacity: 16319, wikidata: "Q7431225" },
+  { espnId: "3921", name: "Schoellkopf Field", capacity: 25597, wikidata: "Q3475468" },
+  { espnId: "3923", name: "Scott Stadium", capacity: 61500, wikidata: "Q1133538" },
+  { espnId: "3925", name: "Seibert Stadium", capacity: 6700, wikidata: "Q7446572" },
+  { espnId: "3931", name: "Smisor Stadium", capacity: 3e3, wikidata: "Q14689943" },
+  { espnId: "3932", name: "SDCCU Stadium", capacity: 70561, wikidata: "Q956072" },
+  { espnId: "3933", name: "Soldier Field", capacity: 61500, wikidata: "Q1132413" },
+  { espnId: "3935", name: "CEFCU Stadium", capacity: 30456, wikidata: "Q2165358" },
+  { espnId: "3936", name: "Spartan Stadium", capacity: 75005, wikidata: "Q2164621" },
+  { espnId: "3937", name: "Empower Field at Mile High", capacity: 76125, wikidata: "Q1046135" },
+  { espnId: "3940", name: "Stanford Stadium", capacity: 50424, wikidata: "Q692470" },
+  { espnId: "3942", name: "Stewart Stadium", capacity: 17312, wikidata: "Q7615946" },
+  { espnId: "3944", name: "Strawberry Stadium", capacity: 7408, wikidata: "Q7622497" },
+  { espnId: "3946", name: "Sun Bowl", capacity: 51500, wikidata: "Q3503735" },
+  { espnId: "3947", name: "Mountain America Stadium", capacity: 64248, wikidata: "Q1849318" },
+  { espnId: "3948", name: "Hard Rock Stadium", capacity: 64767, wikidata: "Q864339" },
+  { espnId: "3950", name: "Superior Dome", capacity: 8e3, wikidata: "Q560209" },
+  { espnId: "3953", name: "Huntington Bank Stadium", capacity: 50805, wikidata: "Q3512039" },
+  { espnId: "3958", name: "Tiger Stadium (LA)", capacity: 102321, wikidata: "Q1594708" },
+  { espnId: "3962", name: "Tucker Stadium", capacity: 16500, wikidata: "Q7851090" },
+  { espnId: "3967", name: "UNI-Dome", capacity: 16324, wikidata: "Q7865270" },
+  { espnId: "3970", name: "State Farm Stadium", capacity: 63400, wikidata: "Q756433" },
+  { espnId: "3971", name: "University Stadium (NM)", capacity: 39224, wikidata: "Q936242" },
+  { espnId: "3973", name: "FirstBank Stadium", capacity: 40550, wikidata: "Q3554494" },
+  { espnId: "3976", name: "Mississippi Veterans Memorial Stadium", capacity: 60492, wikidata: "Q606901" },
+  { espnId: "3980", name: "Waldo Stadium", capacity: 30200, wikidata: "Q7961584" },
+  { espnId: "3982", name: "Wallace Wade Stadium", capacity: 33941, wikidata: "Q3565475" },
+  { espnId: "3984", name: "War Memorial Stadium", capacity: 29181, wikidata: "Q3566222" },
+  { espnId: "3985", name: "Warren McGuirk Alumni Stadium", capacity: 17e3, wikidata: "Q6588293" },
+  { espnId: "3992", name: "Williams Stadium (VA)", capacity: 25e3, wikidata: "Q8021099" },
+  { espnId: "3994", name: "Williams-Brice Stadium", capacity: 80250, wikidata: "Q940522" },
+  { espnId: "3997", name: "Yale Bowl", capacity: 61446, wikidata: "Q1535796" },
+  { espnId: "4015", name: "Barron Stadium", capacity: 6500, wikidata: "Q16950442" },
+  { espnId: "4246", name: "Center Parc Stadium", capacity: 24333, wikidata: "Q28449162" },
+  { espnId: "4418", name: "Jerry Richardson Stadium", capacity: 15314, wikidata: "Q14707992" },
+  { espnId: "4424", name: "Husky Stadium (TX)", capacity: 70083, wikidata: "Q1136463" },
+  { espnId: "4429", name: "Seth Grove Stadium", capacity: 7700, wikidata: "Q7456492" },
+  { espnId: "4433", name: "George P. Miller Stadium", capacity: 6500, wikidata: "Q6859242" },
+  { espnId: "4436", name: "Adamson Stadium", capacity: 6500, wikidata: "Q5731949" },
+  { espnId: "4440", name: "Sox Harrison Stadium", capacity: 6e3, wikidata: "Q7571959" },
+  { espnId: "4729", name: "Yulman Stadium", capacity: 3e4, wikidata: "Q8060993" },
+  { espnId: "4738", name: "Levi's Stadium", capacity: 68500, wikidata: "Q7419343" },
+  { espnId: "4747", name: "Abbott Memorial Alumni Stadium", capacity: 1e4, wikidata: "Q4664369" },
+  { espnId: "4765", name: "Hillsboro Stadium", capacity: 7600, wikidata: "Q5763593" },
+  { espnId: "4854", name: "Perkins Stadium", capacity: 13500, wikidata: "Q7169059" },
+  { espnId: "5116", name: "O'Shaughnessy Stadium", capacity: 5e3, wikidata: "Q96619820" },
+  { espnId: "5117", name: "Clemens Stadium", capacity: 7482, wikidata: "Q5131270" },
+  { espnId: "5124", name: "Homewood Field", capacity: 8500, wikidata: "Q5890690" },
+  { espnId: "5134", name: "Bearcat Stadium", capacity: 6500, wikidata: "Q4876632" },
+  { espnId: "5220", name: "Garrison Stadium", capacity: 5e3, wikidata: "Q5524059" },
+  { espnId: "5239", name: "U.S. Bank Stadium", capacity: 7e4, wikidata: "Q7929512" },
+  { espnId: "5348", name: "Mercedes-Benz Stadium", capacity: 71e3, wikidata: "Q7007552" },
+  { espnId: "5400", name: "William B. Greene Jr. Stadium", capacity: 7694, wikidata: "Q22073673" },
+  { espnId: "5440", name: "Wildcat Stadium (TX)", capacity: 11015, wikidata: "Q5179652" },
+  { espnId: "5793", name: "Macholtz Stadium", capacity: 4300, wikidata: "Q6723829" },
+  { espnId: "5798", name: "Jerry E. Apple Stadium", capacity: 2500, wikidata: "Q93312979" },
+  { espnId: "5803", name: "Bison Stadium", capacity: 15012, wikidata: "Q7079090" },
+  { espnId: "5806", name: "Whittier Field", capacity: 9e3, wikidata: "Q7996873" },
+  { espnId: "5807", name: "Brevard Memorial Stadium", capacity: 7e3, wikidata: "Q4962524" },
+  { espnId: "5822", name: "Cadet Memorial Field", capacity: 4500, wikidata: "Q5016435" },
+  { espnId: "5823", name: "Clark Field", capacity: 2e4, wikidata: "Q5127221" },
+  { espnId: "5825", name: "Jake Christiansen Stadium", capacity: 7e3, wikidata: "Q16632764" },
+  { espnId: "5838", name: "Ornelas Stadium", capacity: 2046, wikidata: "Q93312331" },
+  { espnId: "5849", name: "Reeves Field (PA)", capacity: 5500, wikidata: "Q7307060" },
+  { espnId: "5853", name: "Francis Field (IL)", capacity: 2e3, wikidata: "Q5480915" },
+  { espnId: "5867", name: "Albany State University Coliseum", capacity: 1e4, wikidata: "Q4709387" },
+  { espnId: "5875", name: "Charlie W. Johnson Stadium", capacity: 11e3, wikidata: "Q5085649" },
+  { espnId: "5880", name: "Elliott Field at Don Beebe Stadium", capacity: 3500, wikidata: "Q19878083" },
+  { espnId: "5882", name: "Ralph Stocker Stadium", capacity: 8e3, wikidata: "Q7288123" },
+  { espnId: "5884", name: "Buffalo Stadium", capacity: 11556, wikidata: "Q4985856" },
+  { espnId: "5890", name: "Lewis Field Stadium", capacity: 6362, wikidata: "Q6536551" },
+  { espnId: "5892", name: "Armfield Athletic Center", capacity: 2200, wikidata: "Q4793403" },
+  { espnId: "5897", name: "Francis Field (MO)", capacity: 2e3, wikidata: "Q5480915" },
+  { espnId: "5900", name: "Don and Nona Williams Stadium", capacity: 4500, wikidata: "Q5293775" },
+  { espnId: "5907", name: "McCarthy Stadium (Wilkes Barre)", capacity: 7500, wikidata: "Q6800202" },
+  { espnId: "5916", name: "Carson Park", capacity: 3800, wikidata: "Q16028032" },
+  { espnId: "5917", name: "Ratliff Stadium", capacity: 19302, wikidata: "Q7295820" },
+  { espnId: "5920", name: "Griswold Stadium", capacity: 3500, wikidata: "Q16632770" },
+  { espnId: "5922", name: "Wildcat Field", capacity: 1e3, wikidata: "Q8001010" },
+  { espnId: "5931", name: "Don Drumm Stadium", capacity: 5e3, wikidata: "Q111325663" },
+  { espnId: "5932", name: "Lloyd L. Thornton Stadium", capacity: 3e3, wikidata: "Q6662564" },
+  { espnId: "5941", name: "Roebuck Stadium", capacity: 5e3, wikidata: "Q7357555" },
+  { espnId: "5945", name: "Wildcat Stadium (GA)", capacity: 11015, wikidata: "Q5179652" },
+  { espnId: "5997", name: "Brooks Stadium (NY)", capacity: 9214, wikidata: "Q4975053" },
+  { espnId: "5998", name: "Monarch Stadium", capacity: 800, wikidata: "Q6898026" },
+  { espnId: "6033", name: "Carl Smith Stadium", capacity: 3086, wikidata: "Q5040823" },
+  { espnId: "6041", name: "Irwin Belk Complex", capacity: 4500, wikidata: "Q14707983" },
+  { espnId: "6052", name: "Herb Parker Stadium", capacity: 4500, wikidata: "Q5733115" },
+  { espnId: "6058", name: "Ralph F. DellaCamera Stadium", capacity: 5e3, wikidata: "Q7287479" },
+  { espnId: "6060", name: "Grace P. Johnson Stadium", capacity: 4e3, wikidata: "Q5591330" },
+  { espnId: "6061", name: "Younts Stadium", capacity: 5e3, wikidata: "Q8058709" },
+  { espnId: "6067", name: "Carnie Smith Stadium", capacity: 8343, wikidata: "Q5044053" },
+  { espnId: "6076", name: "Javelina Stadium", capacity: 15e3, wikidata: "Q6165350" },
+  { espnId: "6078", name: "Pioneer Field (TN)", capacity: 3500, wikidata: "Q7196686" },
+  { espnId: "6079", name: "Youngman Field at Alumni Stadium (VT)", capacity: 3500, wikidata: "Q3572873" },
+  { espnId: "6087", name: "Drake Field (NY)", capacity: 7550, wikidata: "Q5305599" },
+  { espnId: "6094", name: "Reynolds Field", capacity: 1500, wikidata: "Q7319642" },
+  { espnId: "6123", name: "Jackson Field", capacity: 7527, wikidata: "Q5167437" },
+  { espnId: "6139", name: "Cameron Stadium", capacity: 5e3, wikidata: "Q5026382" },
+  { espnId: "6143", name: "Golden Bear Stadium", capacity: 1500, wikidata: "Q5579203" },
+  { espnId: "6146", name: "Memorial Field (PA)", capacity: 13e3, wikidata: "Q6815406" },
+  { espnId: "6149", name: "McCulloch Stadium", capacity: 2500, wikidata: "Q6800763" },
+  { espnId: "6202", name: "Cardinal Stadium (DC)", capacity: 3500, wikidata: "Q19658480" },
+  { espnId: "6221", name: "Mitchell Stadium", capacity: 1e4, wikidata: "Q6881405" },
+  { espnId: "6501", name: "Allegiant Stadium", capacity: 65e3, wikidata: "Q27768421" }
+];
 
 // server/providers/espn/normalize.ts
 var PROVIDER_NAME = "ESPN";
 var SITE_BASE = "https://site.api.espn.com/apis/site/v2/sports/football";
 var RESULT_LIMIT = 500;
+var CAPACITIES = new Map(VENUE_CAPACITIES.map((v) => [v.espnId, v.capacity]));
+var BY_NAME = new Map(VENUE_CAPACITIES.map((v) => [v.name, v.capacity]));
+var capacityFor = (venueId, name) => {
+  if (venueId) return CAPACITIES.get(venueId) ?? null;
+  return name ? BY_NAME.get(name) ?? null : null;
+};
 var espnLeaguePath = (league) => league === "nfl" ? "nfl" : "college-football";
 function scoreboardUrl(league, dateKey, groupId) {
   const q = new URLSearchParams({ dates: dateKey, limit: String(RESULT_LIMIT) });
@@ -3114,7 +3410,7 @@ function normalizeScoreboardEvent(raw, league, divisions, diagnostics = newDiagn
     status,
     situation,
     broadcasts: normalizeBroadcasts(comp),
-    venue: venue ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, "address", "city")), state: str(at(venue, "address", "state")), indoor: bool(venue.indoor), grass: bool(venue.grass) } : null,
+    venue: venue ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, "address", "city")), state: str(at(venue, "address", "state")), indoor: bool(venue.indoor), grass: bool(venue.grass), image: normalizeVenueImage(venue.images), capacity: capacityFor(str(venue.id), str(venue.fullName)) } : null,
     // The weather at the venue, as reported. A roofed venue has none, which is the roof saying so.
     weather: normalizeWeather(e.weather),
     neutralSite: bool(comp.neutralSite),
@@ -3481,7 +3777,7 @@ function normalizeSummary(json, league, divisions = league === "nfl" ? ["NFL"] :
       lastPlay: null
     } : null),
     broadcasts: normalizeBroadcasts(comp),
-    venue: venue ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, "address", "city")), state: str(at(venue, "address", "state")), indoor: bool(venue.indoor), grass: bool(venue.grass) } : null,
+    venue: venue ? { id: str(venue.id), name: str(venue.fullName), city: str(at(venue, "address", "city")), state: str(at(venue, "address", "state")), indoor: bool(venue.indoor), grass: bool(venue.grass), image: normalizeVenueImage(venue.images), capacity: capacityFor(str(venue.id), str(venue.fullName)) } : null,
     weather: normalizeWeather(at(root, "header", "weather") ?? root.weather),
     neutralSite: bool(comp.neutralSite),
     conferenceGame: bool(comp.conferenceCompetition),
@@ -3762,9 +4058,14 @@ var EspnProvider = class {
    *
    * Nothing waits for it. A detail that had to wait on a second round trip the
    * first time anybody opened a game would hold the whole game page behind a
-   * fact about the grass, so the first poll goes out with the surface unknown
-   * and the poll twelve seconds later carries it. Unknown is already a state the
-   * field draws correctly, which is what makes that safe.
+   * fact about the grass, so the first poll goes out with whatever the payload
+   * itself carried and the poll twelve seconds later fills the rest. Unknown is
+   * already a state the field draws correctly, which is what makes that safe.
+   *
+   * It is asked for less than it looks. A game summary already carries the
+   * venue's id, its surface and its photographs, so a game page needs nothing
+   * extra; what this answers is the scoreboard, whose venue has an id and a roof
+   * and neither of the other two.
    */
   venueWith(league, venue) {
     if (!venue?.id || !/^\d{1,32}$/.test(venue.id)) return venue;
@@ -3773,8 +4074,8 @@ var EspnProvider = class {
       void this.lookUpVenue(league, venue.id);
       return venue;
     }
-    if (known.indoor === null && known.grass === null) return venue;
-    return { ...venue, indoor: venue.indoor ?? known.indoor, grass: venue.grass ?? known.grass };
+    if (known.indoor === null && known.grass === null && !known.image) return venue;
+    return { ...venue, indoor: venue.indoor ?? known.indoor, grass: venue.grass ?? known.grass, image: venue.image ?? known.image };
   }
   /** Reads a venue once, in the background, and remembers the answer even when it is nothing. */
   async lookUpVenue(league, id) {
@@ -3784,9 +4085,9 @@ var EspnProvider = class {
       const url = `https://sports.core.api.espn.com/v2/sports/football/leagues/${league === "nfl" ? "nfl" : "college-football"}/venues/${id}`;
       const res = await this.fetcher.getJson(url);
       const doc = res.ok ? obj(res.data) : null;
-      this.venues.set(id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null });
+      this.venues.set(id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null, image: doc ? normalizeVenueImage(doc.images) : null });
     } catch {
-      this.venues.set(id, { indoor: null, grass: null });
+      this.venues.set(id, { indoor: null, grass: null, image: null });
     } finally {
       this.venuesInFlight.delete(id);
     }
@@ -7403,6 +7704,28 @@ var SCENARIOS = [
         startAt: tl.plays[k].t - 2 * MIN,
         endAt: tl.plays[Math.min(tl.plays.length - 1, k + 40)].t + 4 * MIN,
         limitations: ["Synthetic test scenario: the provider reported no snow at this game."],
+        outages: []
+      };
+    }
+  },
+  {
+    id: "test-indoors",
+    label: "Test scenario \xB7 A venue with a roof (synthetic)",
+    description: "Built on a real game, with the venue reported as indoors on a synthetic surface. The real game was played outdoors on grass. Not a real venue report.",
+    synthetic: true,
+    speed: 6,
+    build(fx) {
+      const tl = singleGame(fx, BASE_GAME.league, BASE_GAME.id, BASE_GAME.rel, ["NFL"]);
+      if (!tl) return null;
+      const comp = tl.event.competitions[0];
+      tl.event = { ...tl.event, weather: void 0, competitions: [{ ...comp, venue: { ...comp.venue, indoor: true, grass: false } }] };
+      const k = Math.max(0, Math.floor(tl.plays.length * 0.3));
+      return {
+        date: "20260913",
+        games: [tl],
+        startAt: tl.plays[k].t - 2 * MIN,
+        endAt: tl.plays[Math.min(tl.plays.length - 1, k + 40)].t + 4 * MIN,
+        limitations: ["Synthetic test scenario: this venue is outdoors and has a grass field."],
         outages: []
       };
     }

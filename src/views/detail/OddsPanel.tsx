@@ -246,18 +246,28 @@ function LineSpark({ track, kickoff, w = 120, h = 30 }: { track: LineTrack; kick
  * has no trend rather than a flat one, because a flat trend claims the book
  * stood still when the truth is that nobody looked.
  */
-function LineTrend({ game, track, at }: { game: GameSummary; track: LineTrack; at?: LineAtPlay | null }) {
+function LineTrend({ game, track, figure, at }: { game: GameSummary; track: LineTrack; figure: 'spreadHome' | 'total'; at?: LineAtPlay | null }) {
   const side: Side = track.last <= 0 ? 'home' : 'away';
-  // A spread moving toward a team is that team getting shorter, which is the direction worth naming.
-  const toward = track.change < 0 ? game.home.abbreviation : game.away.abbreviation;
+  /*
+   * Which way it went, named. For a spread that is the team getting shorter; for
+   * a total it is simply up or down, because a total moving toward a team is not
+   * a thing.
+   */
+  const toward = figure === 'total' ? (track.change < 0 ? 'down' : 'up') : track.change < 0 ? game.home.abbreviation : game.away.abbreviation;
   const points = Math.abs(track.change);
   const written = points % 1 === 0 ? String(points) : points.toFixed(1);
   return (
     <div className="odds-trend">
       <LineSpark track={track} kickoff={game.startTime} />
       <p className="odds-trend-text">
-        {/* A spread of zero is not a team favoured by nothing, it is a pick'em, and the book says so. */}
-        {track.last === 0 ? (
+        {figure === 'total' ? (
+          <>
+            <span className="odds-label">Total</span>{' '}
+            <span key={track.last} className="odds-now is-fresh">
+              {formatTotal(track.last)}
+            </span>
+          </>
+        ) : /* A spread of zero is not a team favoured by nothing, it is a pick'em, and the book says so. */ track.last === 0 ? (
           <span key="pk" className="odds-now is-fresh">
             Pick&apos;em
           </span>
@@ -276,8 +286,8 @@ function LineTrend({ game, track, at }: { game: GameSummary; track: LineTrack; a
           side the book did not.
         */}
         <span className="odds-move">
-          {`${written} toward ${toward}`}
-          {at ? ' by this play' : ` from ${track.first === 0 ? "pick'em" : formatTotal(Math.abs(track.first))}`}
+          {figure === 'total' ? `${written} ${toward}` : `${written} toward ${toward}`}
+          {at ? ' by this play' : ` from ${figure !== 'total' && track.first === 0 ? "pick'em" : formatTotal(Math.abs(track.first))}`}
         </span>
       </p>
     </div>
@@ -392,7 +402,20 @@ export function OddsPanel({ game, detail, frame, replay }: { game: GameSummary; 
    * The book's line over the record. While a play is being looked at it stops
    * there, as the exchange's trend does, so the whole block is one moment.
    */
-  const spread = lineTrack(detail?.lineHistory, 'spreadHome', atLine ? Date.parse(atLine.point.at) : undefined);
+  /*
+   * The figure that actually moved, the spread first because it is the line most
+   * people mean. A real recording from a live game showed why this cannot be the
+   * spread alone: over one evening at Lambeau the handicap never budged off 4.5
+   * while the total went 42.5 to 43.5 and the moneyline came in seven points.
+   * Drawing only the spread would have shown nothing at all and called it a
+   * book standing still.
+   */
+  const until = atLine ? Date.parse(atLine.point.at) : undefined;
+  const spread = lineTrack(detail?.lineHistory, 'spreadHome', until);
+  const moved: { track: LineTrack; figure: 'spreadHome' | 'total' } | null = spread ? { track: spread, figure: 'spreadHome' } : (() => {
+    const total = lineTrack(detail?.lineHistory, 'total', until);
+    return total ? { track: total, figure: 'total' as const } : null;
+  })();
 
   return (
     <section className="panel odds-panel" aria-label="Odds and win probability">
@@ -464,7 +487,7 @@ export function OddsPanel({ game, detail, frame, replay }: { game: GameSummary; 
             )}
           </table>
           {/* How the book's own line has moved, from the record, cut at the play being looked at the same way the exchange's trend is. */}
-          {spread && <LineTrend game={game} track={spread} at={atLine} />}
+          {moved && <LineTrend game={game} track={moved.track} figure={moved.figure} at={atLine} />}
           {result.length > 0 && (
             <p className="odds-result">
               {result.map((r) => (

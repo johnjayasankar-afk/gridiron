@@ -21,7 +21,17 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 20_000 },
   fullyParallel: true,
-  workers: process.env.CI ? 2 : 3,
+  /*
+   * Two, everywhere, rather than two in CI and three locally.
+   *
+   * Measured rather than chosen: at three, one heavyweight journey failed on
+   * each of three consecutive full runs and a different one each time, and every
+   * one of them passed on its own. The heavy journeys watch hundreds of frames
+   * and assert on timing, so a third browser competing for the machine is enough
+   * to move them. At two the whole Chrome suite passed, and local now reproduces
+   * what CI runs, which is worth more than the minute it costs.
+   */
+  workers: 2,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {

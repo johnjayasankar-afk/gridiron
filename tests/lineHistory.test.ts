@@ -299,6 +299,36 @@ describe('the sportsbook block on the page', () => {
     expect(html).not.toContain('odds-move is-down');
   });
 
+  /*
+   * From a real recording at Lambeau: over one evening the handicap never moved
+   * off 4.5 while the total went 42.5 to 43.5. Drawing only the spread would
+   * have shown nothing and called it a book standing still.
+   */
+  it('falls back to the total when the spread held but the total moved', () => {
+    const lambeau: LineHistory = {
+      provider: 'Book',
+      captured: false,
+      points: [
+        { ...history.points[0], spreadHome: -4.5, spreadAway: 4.5, total: 42.5, moneylineHome: -245 },
+        { ...history.points[1], spreadHome: -4.5, spreadAway: 4.5, total: 43.5, moneylineHome: -238 },
+      ] as LinePoint[],
+    };
+    const detail = { ...detailWith(lambeau, plays), summary };
+    const html = renderToStaticMarkup(createElement(OddsPanel, { game: summary, detail, frame: null, replay: false }));
+    expect(html).toContain('odds-spark-line');
+    expect(html).toContain('Total');
+    expect(html).toContain('43.5');
+    // A total moving is up or down, never toward a team.
+    expect(html).toContain('1 up from 42.5');
+    expect(html).not.toContain('toward');
+  });
+
+  it('prefers the spread when both moved, because that is the line most people mean', () => {
+    const html = render(null);
+    expect(html).toContain('3 toward HOM');
+    expect(html).not.toContain('Total</span>');
+  });
+
   it('draws no trend at all for a game nothing was recording, rather than a flat one', () => {
     const detail = { ...detailWith(null, plays), summary };
     const html = renderToStaticMarkup(createElement(OddsPanel, { game: summary, detail, frame: null, replay: false }));

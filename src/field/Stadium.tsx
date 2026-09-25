@@ -20,40 +20,24 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useGraphics } from '../state/graphics';
 import { scoringZone } from '../../shared/field';
 import { towerStrength, type Sky } from '../../shared/sky';
+import { bowlFor, type Bowl, type BowlTier } from '../../shared/bowl';
 import type { PlayAnimation } from '../../shared/playAnimation';
 import { accentFor } from './color';
 import { fieldProbe } from './probe';
 import { fadeTexture, poolTexture, sparkTexture } from './textures';
 
-const HALF_WIDTH = 160 / 6;
 /** How long the stands answer a score, in milliseconds. A turnover is shorter. */
 const CHEER_MS = 3400;
 const TURNOVER_MS = 2200;
 
-interface Tier {
-  /** Centre of the stand's front edge. */
-  x: number;
-  z: number;
-  /** Direction the stand faces (toward the field), as a rotation about y. */
-  rotation: number;
-  length: number;
-  depth: number;
-  rows: number;
-  rise: number;
-}
+type Tier = BowlTier;
 
-const TIERS: Tier[] = [
-  { x: 0, z: -(HALF_WIDTH + 9), rotation: 0, length: 150, depth: 26, rows: 9, rise: 1.7 },
-  { x: 0, z: HALF_WIDTH + 9, rotation: Math.PI, length: 150, depth: 26, rows: 9, rise: 1.7 },
-  { x: -79, z: 0, rotation: Math.PI / 2, length: 86, depth: 18, rows: 6, rise: 1.5 },
-  { x: 79, z: 0, rotation: -Math.PI / 2, length: 86, depth: 18, rows: 6, rise: 1.5 },
-];
-
-const TOWERS: Array<[number, number]> = [
-  [-84, -54],
-  [84, -54],
-  [-84, 54],
-  [84, 54],
+/** Four towers, at the bowl's own corners, so they clear whatever stands they are lighting. */
+const towersFor = (bowl: Bowl): Array<[number, number]> => [
+  [-bowl.towerX, -bowl.towerZ],
+  [bowl.towerX, -bowl.towerZ],
+  [-bowl.towerX, bowl.towerZ],
+  [bowl.towerX, bowl.towerZ],
 ];
 
 /** The bowl's floor, which everything is measured from. */
@@ -99,7 +83,7 @@ function shade(geometry: THREE.BufferGeometry, top: number): THREE.BufferGeometr
   return geometry;
 }
 
-function build() {
+function build(bowl: Bowl) {
   const steps: THREE.BufferGeometry[] = [];
   const rails: THREE.BufferGeometry[] = [];
   const lights: number[] = [];
@@ -108,7 +92,7 @@ function build() {
   let seed = 20260914;
   const rand = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
 
-  for (const tier of TIERS) {
+  for (const tier of bowl.tiers) {
     const rowDepth = tier.depth / tier.rows;
     const crest = tier.rows * tier.rise + FLOOR;
     // The lit rail along the front of the stand. It is the line that makes a
@@ -151,6 +135,7 @@ function build() {
   const cones: THREE.BufferGeometry[] = [];
   const lamps: number[] = [];
   const up = new THREE.Vector3(0, 1, 0);
+  const TOWERS = towersFor(bowl);
   for (const [x, z] of TOWERS) {
     const pole = new THREE.CylinderGeometry(0.5, 0.7, 40, 8);
     pole.translate(x, 17, z);
@@ -181,6 +166,68 @@ function build() {
     return pool;
   });
 
+  /*
+   * A roof, for a venue the provider says is indoors.
+   *
+   * It cannot be a lid. The cameras look down from well above the bowl, so a
+   * closed roof would hide the entire subject, and a field nobody can see is a
+   * worse answer than no roof at all. Real enclosed stadiums solve the same
+   * problem for a broadcast the same way: this is a deck over the stands with an
+   * opening above the field, ribbed from the corners in, and a membrane across
+   * the opening faint enough to read as a ceiling and clear enough to play
+   * under. Like everything else on this field it is schematic. The provider
+   * reports that the venue has a roof, not which roof, and this does not pretend
+   * to be that one.
+   */
+  const deck: THREE.BufferGeometry[] = [];
+  const ribs: THREE.BufferGeometry[] = [];
+  const OUTER = { x: 108, z: 74 };
+  const OPENING = { x: 68, z: 40 };
+  /*
+   * Low, and see-through. Both follow from where the cameras are rather than
+   * from taste: they sit above the bowl and look down, so the deck on the near
+   * side is between the camera and the field. Worked through for the isometric
+   * camera at (-70, 94, 106), a deck at y=34 projects its inner edge onto the
+   * middle of the field and hides the far end; dropping it to 20 pulls that back
+   * to the near sideline, and the rest is solved by letting the game show
+   * through, which is also what a roof looks like from underneath.
+   */
+  const ROOF_Y = 20;
+  const band = (w: number, d: number, x: number, z: number) => {
+    const g = new THREE.PlaneGeometry(w, d);
+    g.rotateX(Math.PI / 2); // facing down, because it is only ever seen from below or edge on
+    g.translate(x, ROOF_Y, z);
+    return g;
+  };
+  // Four decks around the opening, which together are a rectangle with a hole in it.
+  deck.push(band(OUTER.x * 2, OUTER.z - OPENING.z, 0, -(OPENING.z + OUTER.z) / 2));
+  deck.push(band(OUTER.x * 2, OUTER.z - OPENING.z, 0, (OPENING.z + OUTER.z) / 2));
+  deck.push(band(OUTER.x - OPENING.x, OPENING.z * 2, -(OPENING.x + OUTER.x) / 2, 0));
+  deck.push(band(OUTER.x - OPENING.x, OPENING.z * 2, (OPENING.x + OUTER.x) / 2, 0));
+  // Ribs running in toward the opening, which is what makes a deck read as a roof.
+  for (let i = -6; i <= 6; i++) {
+    const x = (i / 6) * OUTER.x;
+    for (const side of [-1, 1]) {
+      const rib = new THREE.PlaneGeometry(0.5, OUTER.z - OPENING.z);
+      rib.rotateX(Math.PI / 2);
+      rib.translate(x, ROOF_Y - 0.12, side * (OPENING.z + OUTER.z) / 2);
+      ribs.push(rib);
+    }
+  }
+  for (let i = -3; i <= 3; i++) {
+    const z = (i / 3) * OPENING.z;
+    for (const side of [-1, 1]) {
+      const rib = new THREE.PlaneGeometry(OUTER.x - OPENING.x, 0.5);
+      rib.rotateX(Math.PI / 2);
+      rib.translate(side * (OPENING.x + OUTER.x) / 2, ROOF_Y - 0.12, z);
+      ribs.push(rib);
+    }
+  }
+  // The membrane over the opening: a ceiling you can see the game through.
+  const membrane = new THREE.PlaneGeometry(OPENING.x * 2, OPENING.z * 2);
+  membrane.rotateX(Math.PI / 2);
+  membrane.translate(0, ROOF_Y - 0.3, 0);
+
   const lightGeometry = new THREE.BufferGeometry();
   lightGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lights, 3));
   lightGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -197,10 +244,21 @@ function build() {
     panels: mergeAll(panels),
     lamps: lampGeometry,
     cones: mergeAll(cones),
+    roof: mergeAll(deck),
+    ribs: mergeAll(ribs),
+    membrane,
   };
 }
 
-let cache: ReturnType<typeof build> | null = null;
+/*
+ * One built bowl per size, not one for the whole app.
+ *
+ * Building a bowl walks every row of every stand and scatters a seat light
+ * along it, which is not something to do on a render. There are only ever a
+ * handful of distinct sizes in play at once, and a game page shows one bowl, so
+ * they are kept by the capacity they were built from and reused.
+ */
+const cache = new Map<string, ReturnType<typeof build>>();
 
 export interface StadiumProps {
   /** The play the field is showing, so the stands can answer a reported score. */
@@ -209,12 +267,24 @@ export interface StadiumProps {
   awayColor: string | null;
   /** The sky the provider reports at this venue, so the towers know whether they are the light. */
   sky: Sky | null;
+  /** How many people the venue holds, so the bowl is the size of the real one. Null where none is known. */
+  capacity: number | null;
 }
 
-export const Stadium = memo(function Stadium({ animation, homeColor, awayColor, sky }: StadiumProps) {
-  const geometry = (cache ??= build());
+export const Stadium = memo(function Stadium({ animation, homeColor, awayColor, sky, capacity }: StadiumProps) {
+  const bowl = useMemo(() => bowlFor(capacity), [capacity]);
+  const geometry = useMemo(() => {
+    const key = String(bowl.capacity ?? 'default');
+    let built = cache.get(key);
+    if (!built) {
+      built = build(bowl);
+      cache.set(key, built);
+    }
+    return built;
+  }, [bowl]);
   const invalidate = useThree((s) => s.invalidate);
   const towers = towerStrength(sky);
+  const roofed = sky?.indoor === true;
 
   const uniforms = useMemo(
     () => ({
@@ -294,6 +364,16 @@ export const Stadium = memo(function Stadium({ animation, homeColor, awayColor, 
       panels: new THREE.MeshBasicMaterial({ color: '#a8f0d0', transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
       lamps: new THREE.PointsMaterial({ map: sparkTexture(), color: '#dffff2', size: 10, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
       cones: new THREE.MeshBasicMaterial({ map: fadeTexture('down'), color: '#c9fbe6', transparent: true, opacity: 0.13, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }),
+      /*
+       * The roof, for a venue the provider says is indoors. The deck is solid
+       * and dark because it is a ceiling seen from underneath, the ribs are lit
+       * like the rails on the stands, and the membrane over the field is faint
+       * enough to play under. All three are drawn from both sides: a camera
+       * dropped to the broadcast angle looks along the deck rather than up at it.
+       */
+      roof: haze(new THREE.MeshBasicMaterial({ color: '#07150f', transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }), 0.7),
+      ribs: new THREE.MeshBasicMaterial({ color: '#63d6ae', transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }),
+      membrane: new THREE.MeshBasicMaterial({ color: '#8fe9c8', transparent: true, opacity: 0.045, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }),
     };
   }, [uniforms]);
   useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials]);
@@ -377,6 +457,18 @@ export const Stadium = memo(function Stadium({ animation, homeColor, awayColor, 
       <mesh geometry={geometry.panels} material={materials.panels} renderOrder={2} />
       <mesh geometry={geometry.cones} material={materials.cones} renderOrder={2} />
       <points geometry={geometry.lamps} material={materials.lamps} renderOrder={3} />
+      {/*
+        Only where the provider says the venue has a roof. It is a deck over the
+        stands with an opening above the field rather than a lid, because the
+        cameras look down from above the bowl and a lid would hide the game.
+      */}
+      {roofed && (
+        <>
+          <mesh geometry={geometry.roof} material={materials.roof} renderOrder={1} />
+          <mesh geometry={geometry.ribs} material={materials.ribs} renderOrder={2} />
+          <mesh geometry={geometry.membrane} material={materials.membrane} renderOrder={2} />
+        </>
+      )}
     </group>
   );
 });

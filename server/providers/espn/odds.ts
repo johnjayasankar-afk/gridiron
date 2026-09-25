@@ -16,7 +16,7 @@
  *   percent. The two sides need not add up to 100.
  * Nothing here computes a chance: every value is the provider's own.
  */
-import type { BettingLines, LeagueId, LinePrice, MatchupPredictor, OpenLatest, Side, WinProbability, WinProbabilityPoint } from '../../../shared/model.js';
+import type { BettingLines, LeagueId, LinePrice, MatchupPredictor, OpenLatest, Side, VenueImage, WinProbability, WinProbabilityPoint } from '../../../shared/model.js';
 import type { GameWeather } from '../../../shared/sky.js';
 import { parseAmerican } from '../../../shared/odds.js';
 import { arr, at, bool, num, obj, str } from './raw.js';
@@ -288,4 +288,30 @@ export function normalizeWeather(raw: unknown): GameWeather | null {
   const id = conditionId !== null && Number.isFinite(conditionId) ? conditionId : null;
   if (id === null && temperature === null && !displayValue) return null;
   return { conditionId: id, temperature, displayValue };
+}
+
+/**
+ * The provider's photograph of a venue, chosen from the list it publishes.
+ *
+ * The interior is preferred, because what somebody watching a football game
+ * wants to see is the bowl the game is in and not the outside of the building.
+ * Only an address the provider actually listed is used: a guessed URL that
+ * happens to answer is not the same as being told where the picture is, and the
+ * provider serves a different picture at some guessed paths.
+ *
+ * The provider ships an empty `alt` for every one of them, so a caller writes
+ * its own rather than passing an empty string to a screen reader.
+ */
+export function normalizeVenueImage(raw: unknown): VenueImage | null {
+  const candidates = arr(raw)
+    .map(obj)
+    .filter((i): i is Record<string, unknown> => !!i && typeof i.href === 'string' && /^https:\/\//.test(String(i.href)));
+  if (!candidates.length) return null;
+  const rels = (i: Record<string, unknown>) => arr(i.rel).map((r) => str(r)).filter((r): r is string => !!r);
+  const chosen = candidates.find((i) => rels(i).includes('interior')) ?? candidates[0];
+  const width = num(chosen.width);
+  const height = num(chosen.height);
+  // Both dimensions or neither: they are only carried so the page can hold the space before the picture arrives.
+  if (width === null || height === null || width <= 0 || height <= 0) return null;
+  return { href: String(chosen.href), width, height, interior: rels(chosen).includes('interior') };
 }

@@ -20,6 +20,7 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 - [How updates work](#how-updates-work)
 - [Odds and win probability](#odds-and-win-probability)
 - [The sky over the field](#the-sky-over-the-field)
+- [The arena itself](#the-arena-itself)
 - [Reading the field: schematic conventions](#reading-the-field-schematic-conventions)
 - [Replay lab](#replay-lab)
 - [Alerts](#alerts)
@@ -44,7 +45,8 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
   - **Stay** holds the current game and **Skip** sets it aside for 3 minutes.
   - When nothing is live, it shows the next kickoff.
 - **Game page** at `/game/<id>`, shareable:
-  - A large 3D field with isometric, broadcast and top-down cameras, reset, and a restrained orbit and zoom. With holographic fields and Full effects, the camera flies in over a decorative stadium.
+  - A large 3D field with isometric, broadcast and top-down cameras, reset, and a restrained orbit and zoom, inside a bowl the size of the real stadium.
+  - **A scorebug on the field**, the way a broadcast puts one there: both sides in their own colours, the score, the clock, whoever has the ball as a lit row, what they face in the provider's own words, timeouts as three pips a side, and the red zone. It makes the field self-contained on the wall, in a pop-out, or scrolled past the scoreboard. With holographic fields and Full effects, the camera flies in over a decorative stadium.
   - Scoreboard and situation, with previous and next game buttons. The `[` and `]` keys and a swipe across the scoreboard also move between games.
   - An odds and win probability panel, **as of whatever play you are looking at**. The win probability is the provider's figure after that play, with the change it made. The exchange's price is the last one recorded at or before that play's wall-clock time, with the change since the play before it, and the trend beside it stops there too, so the whole block is one moment rather than two. Nothing is interpolated: a price recorded after the play is never used, because it was not known then, and a play the provider gave no wall-clock time for gets no price at all.
   - The sportsbook rewinds too, from Gridiron's own record. The provider reports an opening line and a latest one with no times attached, so Gridiron writes down every line it is told and when it was told it, and shows the one that stood at the play with what it had been before: "As reported 5 min before this play". Where the record has nothing to say about that moment it says which kind of nothing it is, **"No line recorded at this play"** for a game it was watching and **"Opening and closing lines, not play by play"** for a game no record was kept for, rather than letting a closing line be read as the line at that moment.
@@ -403,7 +405,21 @@ Every field used to be lit the same way, which made a night game in the snow and
 - **Rain and snow fall on the game page**, where the provider reported rain, a thunderstorm, snow or ice, and nowhere else. One draw over the field, moved entirely in a vertex shader: each drop walks down its own column at its own speed and wraps back to the top, so a frame writes one uniform and nothing is rebuilt while it falls. Rain is a streak, snow drifts sideways as it comes down. Cards never run their own weather; thirteen of them would be thirteen of these, for drops a pixel across. A card's turf is still lit by its own game's sky, which costs one colour, so a Sunday of thirteen cards shows the snowy games and the sunny ones apart at a glance.
 - **A grass field is mown and a synthetic one is not.** Mowing stripes are made by a mower laying the blades one way and then the other, and an artificial surface has no blades to lay. ESPN reports which a venue has on the venue's own document, read once per venue and then remembered: a synthetic field is one flat weave with a seam every five yards where its rolls meet, and a grass field keeps its stripes.
 - **The field says what it is lit by**, in ESPN's own words and its own temperature, beside the schematic note. Where nothing was reported the field is lit exactly as it was before there was a sky, and nothing is appended.
-- **Where to see one.** No captured replay carries weather, because it lives on the live scoreboard and was not captured with those games. The `test-weather` replay scenario puts snow after dark on a grass field at a real game that was played in the dry, and says so in its label, its description and the replay bar.
+- **A venue with a roof is given one.** Whether a venue is indoors is reported, and a roofed one gets a deck over the stands with an opening above the field, ribbed from the corners in, and a membrane the game shows through. It is not a lid: the cameras look down from above the bowl, and a lid would hide the subject. Like everything else on this field it is schematic. ESPN reports that the venue has a roof, not which roof.
+- **Where to see one.** No captured replay carries weather or a roof, because both live on the live scoreboard and neither was captured with those games. The `test-weather` scenario puts snow after dark on a grass field and `test-indoors` puts a roof on an open air venue, both at a real game that had neither, and both say so in their label, their description and the replay bar.
+
+## The arena itself
+
+Every field Gridiron draws is a schematic on purpose: the real orientation of a stadium is not reported and neither is its shape, so the field says what it knows and nothing more. That leaves one honest way to show the real place, which is the real picture of it.
+
+- **The game info tab carries the venue's own photograph**, the inside of the bowl where ESPN has one, with the venue and its city under it. Twenty nine of thirty two venues checked across an NFL slate and a college Saturday had one, and every one of those had an interior shot.
+- **Only addresses ESPN lists are used.** Guessing a path is not the same as being told where the picture is, and a guessed path here answers: the same venue id under the college prefix returns a different picture than under the NFL one. A venue ESPN publishes no picture for shows none.
+- **It loads lazily, behind the tab.** ESPN serves these at full size and ignores any request to resize, so they are one to three megabytes. The space is held from the reported dimensions so the tab never jumps when one lands.
+- **The description is written here**, because ESPN ships an empty alt for every one of them. It says what the picture is known to be, which is the venue and whether it was taken inside the bowl, and never what is in it.
+- **The surface, the roof and the reported weather are stated on the same tab**, since all three change how the field is drawn.
+- **The bowl is the size of the real stadium.** ESPN reports no capacity anywhere, so it comes from a checked-in table of 276 venues generated from Wikidata by `npx tsx scripts/capture-venues.ts`. Every row carries the Wikidata id it came from, so any of them can be checked by hand, and a match is only taken when it is unarguable: the venue is in the United States, ESPN's city appears in the entry's administrative chain, and exactly one entry survives both. Nothing is queried at runtime. A venue with no row is drawn at the size Gridiron has always drawn.
+- **What that changes is size, not shape.** Nobody here has the footprint of any stadium, and a bowl drawn to look like one it is not would be an invention nobody could check. A bigger capacity is a bigger, fuller bowl with its floodlights further out; a ground too small for end stands is drawn without them. The field stays schematic and says so.
+- **Not reported anywhere, and so not drawn**: a venue's orientation, footprint or roof shape.
 
 ## Reading the field: schematic conventions
 

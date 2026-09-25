@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-24T23:23:08.802Z",
+  "recordedAt": "2026-09-25T03:58:03.684Z",
   "environment": "Production build, replay mode (nfl-week1-sunday from 35%, 60x), headless Chrome via Playwright, viewport 1920x3200",
   "summary": {
     "cards": 13,
@@ -13,19 +13,19 @@
   },
   "samples": [
     {
-      "at": 6081,
-      "calls": 189,
-      "triangles": 24450,
-      "geometries": 25,
+      "at": 6149,
+      "calls": 187,
+      "triangles": 24448,
+      "geometries": 24,
       "textures": 46,
       "programs": 10,
       "views": 13,
       "dpr": 1,
-      "frameMs": 1.71,
-      "frames": 200
+      "frameMs": 1.72,
+      "frames": 206
     },
     {
-      "at": 11128,
+      "at": 11196,
       "calls": 189,
       "triangles": 24452,
       "geometries": 25,
@@ -33,35 +33,35 @@
       "programs": 10,
       "views": 13,
       "dpr": 1,
-      "frameMs": 2.44,
-      "frames": 375
+      "frameMs": 2.59,
+      "frames": 378
     },
     {
-      "at": 16178,
-      "calls": 176,
-      "triangles": 23740,
+      "at": 16262,
+      "calls": 175,
+      "triangles": 23738,
       "geometries": 23,
       "textures": 46,
       "programs": 10,
       "views": 13,
       "dpr": 1,
-      "frameMs": 1.96,
-      "frames": 517
+      "frameMs": 1.99,
+      "frames": 522
     },
     {
-      "at": 21228,
-      "calls": 151,
+      "at": 21315,
+      "calls": 152,
       "triangles": 22796,
       "geometries": 25,
       "textures": 46,
       "programs": 10,
       "views": 13,
       "dpr": 1,
-      "frameMs": 1.88,
-      "frames": 765
+      "frameMs": 1.65,
+      "frames": 728
     },
     {
-      "at": 26278,
+      "at": 26366,
       "calls": 177,
       "triangles": 23742,
       "geometries": 25,
@@ -69,20 +69,20 @@
       "programs": 10,
       "views": 13,
       "dpr": 1,
-      "frameMs": 1.91,
-      "frames": 958
+      "frameMs": 2,
+      "frames": 951
     },
     {
-      "at": 31346,
-      "calls": 162,
-      "triangles": 23688,
+      "at": 31415,
+      "calls": 166,
+      "triangles": 23770,
       "geometries": 25,
       "textures": 46,
       "programs": 10,
       "views": 13,
       "dpr": 1,
-      "frameMs": 2.1,
-      "frames": 1072
+      "frameMs": 2.05,
+      "frames": 1069
     }
   ]
 }

@@ -19,6 +19,7 @@ import { fieldMessage } from '../components/GameCard';
 import type { CameraPreset } from '../field/cameras';
 import { driveTrack } from '../../shared/driveTrack';
 import { useFieldSound } from '../app/useFieldSound';
+import { ScoreBug } from '../field/ScoreBug';
 import { skyFor, skyLabel } from '../../shared/sky';
 import { FieldView } from '../field/FieldView';
 import { usePlayAnimation } from '../field/usePlayAnimation';
@@ -610,6 +611,13 @@ export function DetailView({ id }: { id: string }) {
                 {label}
               </span>
             )}
+            {/*
+              The bug belongs to the field, so the field answers the question on
+              its own: on the wall, in a pop-out, or simply scrolled past the
+              scoreboard. It reads the play being looked at when one is, like
+              everything else on this page.
+            */}
+            <ScoreBug game={game} situation={fieldSituation} frame={frame ? { period: frame.play.period, clock: frame.play.clock } : null} />
             <span className="field-orientation mono" aria-hidden="true">
               Schematic · {game.away.abbreviation} defends left
               {/* The sky the field is lit by, in the provider's own words, so the light is attributable and not a mood. */}

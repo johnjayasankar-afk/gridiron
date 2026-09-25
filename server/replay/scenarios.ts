@@ -342,6 +342,34 @@ export const SCENARIOS: ScenarioDef[] = [
     },
   },
   {
+    id: 'test-indoors',
+    label: 'Test scenario · A venue with a roof (synthetic)',
+    description: 'Built on a real game, with the venue reported as indoors on a synthetic surface. The real game was played outdoors on grass. Not a real venue report.',
+    synthetic: true,
+    speed: 6,
+    build(fx) {
+      const tl = singleGame(fx, BASE_GAME.league, BASE_GAME.id, BASE_GAME.rel, ['NFL']);
+      if (!tl) return null;
+      /*
+       * A way to see a roof. Whether a venue has one is reported on the live
+       * scoreboard and on the venue's own document, and neither was captured
+       * with these games, so no real replay has an indoor venue in it. The flag
+       * here is the one the provider sends, read by exactly the same code.
+       */
+      const comp = tl.event.competitions[0];
+      tl.event = { ...tl.event, weather: undefined, competitions: [{ ...comp, venue: { ...comp.venue, indoor: true, grass: false } }] };
+      const k = Math.max(0, Math.floor(tl.plays.length * 0.3));
+      return {
+        date: '20260913',
+        games: [tl],
+        startAt: tl.plays[k].t - 2 * MIN,
+        endAt: tl.plays[Math.min(tl.plays.length - 1, k + 40)].t + 4 * MIN,
+        limitations: ['Synthetic test scenario: this venue is outdoors and has a grass field.'],
+        outages: [],
+      };
+    },
+  },
+  {
     id: 'test-provider-outage',
     label: 'Test scenario · Provider outage and recovery (synthetic)',
     description: 'Built on real games. The provider stops answering for two minutes of replay time, then recovers. Not a real outage.',

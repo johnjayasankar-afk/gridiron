@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { ConferenceInfo, Division, DivisionCoverage, GameDetail, GameSummary, LeagueId } from '../../../shared/model.js';
+import type { ConferenceInfo, Division, DivisionCoverage, GameDetail, GameSummary, LeagueId, VenueImage } from '../../../shared/model.js';
 import { parseGameId } from '../../../shared/model.js';
 import type { ProviderFetcher } from '../../fetcher.js';
 import type { DetailResult, ProviderError, ProviderInfo, SlateOptions, SlateResult, SportsProvider } from '../types.js';
@@ -21,7 +21,7 @@ import {
   scoreboardUrl,
   type NormalizeDiagnostics,
 } from './normalize.js';
-import { coreOddsUrl, normalizeCoreOdds, preferLiveLines } from './odds.js';
+import { coreOddsUrl, normalizeCoreOdds, normalizeVenueImage, preferLiveLines } from './odds.js';
 import { arr, at, bool, num, obj, str } from './raw.js';
 
 const DISCOVERY_TTL_MS = 12 * 60 * 60_000;
@@ -50,7 +50,7 @@ export class EspnProvider implements SportsProvider {
   private conferences = new Map<string, { info: ConferenceInfo | null; at: number }>();
   private seasons = new Map<string, { value: { season: number; seasonType: number } | null; at: number }>();
   /** A venue's roof and surface, asked for once per venue and kept for the life of the process. */
-  private venues = new Map<string, { indoor: boolean | null; grass: boolean | null }>();
+  private venues = new Map<string, { indoor: boolean | null; grass: boolean | null; image: VenueImage | null }>();
   private venuesInFlight = new Set<string>();
   private readonly now: () => number;
 
@@ -255,9 +255,14 @@ export class EspnProvider implements SportsProvider {
    *
    * Nothing waits for it. A detail that had to wait on a second round trip the
    * first time anybody opened a game would hold the whole game page behind a
-   * fact about the grass, so the first poll goes out with the surface unknown
-   * and the poll twelve seconds later carries it. Unknown is already a state the
-   * field draws correctly, which is what makes that safe.
+   * fact about the grass, so the first poll goes out with whatever the payload
+   * itself carried and the poll twelve seconds later fills the rest. Unknown is
+   * already a state the field draws correctly, which is what makes that safe.
+   *
+   * It is asked for less than it looks. A game summary already carries the
+   * venue's id, its surface and its photographs, so a game page needs nothing
+   * extra; what this answers is the scoreboard, whose venue has an id and a roof
+   * and neither of the other two.
    */
   private venueWith(league: LeagueId, venue: GameSummary['venue']): GameSummary['venue'] {
     // Digits only, for the same reason the odds URL demands them: this id lands in a path segment.
@@ -267,8 +272,8 @@ export class EspnProvider implements SportsProvider {
       void this.lookUpVenue(league, venue.id);
       return venue;
     }
-    if (known.indoor === null && known.grass === null) return venue;
-    return { ...venue, indoor: venue.indoor ?? known.indoor, grass: venue.grass ?? known.grass };
+    if (known.indoor === null && known.grass === null && !known.image) return venue;
+    return { ...venue, indoor: venue.indoor ?? known.indoor, grass: venue.grass ?? known.grass, image: venue.image ?? known.image };
   }
 
   /** Reads a venue once, in the background, and remembers the answer even when it is nothing. */
@@ -280,9 +285,9 @@ export class EspnProvider implements SportsProvider {
       const res = await this.fetcher.getJson<unknown>(url);
       // A venue that could not be read is remembered as unknown, so it is not asked for again on every poll.
       const doc = res.ok ? obj(res.data) : null;
-      this.venues.set(id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null });
+      this.venues.set(id, { indoor: doc ? bool(doc.indoor) : null, grass: doc ? bool(doc.grass) : null, image: doc ? normalizeVenueImage(doc.images) : null });
     } catch {
-      this.venues.set(id, { indoor: null, grass: null });
+      this.venues.set(id, { indoor: null, grass: null, image: null });
     } finally {
       this.venuesInFlight.delete(id);
     }

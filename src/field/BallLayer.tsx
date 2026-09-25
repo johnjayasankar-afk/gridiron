@@ -23,6 +23,7 @@ import type { FieldStyle } from './style';
 import type { BallTrack } from './frameBus';
 import { fieldProbe, installFieldProbe } from './probe';
 import { acquireBallSkin, ballSkinKey, fadeTexture, haloTexture, releaseBallSkin, retainBallSkin, shadowTexture, sparkTexture } from './textures';
+import { towerStrength, type Sky } from '../../shared/sky';
 
 const BALL_Y = 1.1;
 const BALL = new THREE.Color('#7b4a2a');
@@ -83,6 +84,8 @@ export interface BallLayerProps {
   perspective: boolean;
   /** Written with where the ball is, for the camera that pans with it. */
   ballTrack?: BallTrack | null;
+  /** The sky at this venue, because a ball under floodlights is lit differently from one at one in the afternoon. */
+  sky?: Sky | null;
 }
 
 interface Burst {
@@ -93,10 +96,18 @@ interface Burst {
   last: number;
 }
 
-export const BallLayer = memo(function BallLayer({ league, situation, animation, reducedMotion, compact, hidden, home, away, style, perspective, ballTrack = null }: BallLayerProps) {
+export const BallLayer = memo(function BallLayer({ league, situation, animation, reducedMotion, compact, hidden, home, away, style, perspective, ballTrack = null, sky = null }: BallLayerProps) {
   const invalidate = useThree((s) => s.invalidate);
   const camera = useThree((s) => s.camera);
   const G = fieldGeometry();
+  /*
+   * How hard the venue's own lights are working, which is what the ball is lit
+   * by. A ball under floodlights after dark picks up a harder edge than one at
+   * one in the afternoon, and the same table the towers and the bowl read from
+   * says which this is. Exactly 1 where nothing was reported, so a ball on a
+   * field with no sky is lit as it always was.
+   */
+  const lit = towerStrength(sky);
   const M = fieldMaterials();
   const holo = style === 'holo';
 
@@ -666,7 +677,7 @@ export const BallLayer = memo(function BallLayer({ league, situation, animation,
     ball.rotation.set(s.spin, s.heading, s.pitch, 'YZX');
     // The rim carries a little more while the ball is in the air, which is the
     // moment it has to be followed across a lit field.
-    mats.ballRim.opacity += ((inFlight ? 0.62 : 0.34) - mats.ballRim.opacity) * (reducedMotion ? 1 : 0.18);
+    mats.ballRim.opacity += ((inFlight ? 0.62 : 0.34) * lit - mats.ballRim.opacity) * (reducedMotion ? 1 : 0.18);
     if (halo) {
       /*
        * The mark on the ground under the ball, which is what says the ball is

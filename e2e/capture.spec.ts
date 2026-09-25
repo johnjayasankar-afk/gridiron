@@ -234,6 +234,34 @@ test('v5: the field under its own sky', async ({ page }) => {
   await page.screenshot({ path: `${OUT}/game-1440-weather.png` });
 });
 
+/** A venue the provider says has a roof, which no captured replay has. */
+test('v5: a venue with a roof', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openReplay(page, { path: '/game/nfl-401872925', scenario: 'test-indoors', at: 0.4 });
+  await expect.poll(() => page.evaluate(() => window.__gridironField?.()?.sky?.indoor ?? null), { timeout: 20_000 }).toBe(true);
+  await settle(page);
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${OUT}/game-1440-indoors.png` });
+});
+
+/**
+ * Two bowls the same code drew from two real capacities: the biggest stadium in
+ * the country and one of the smaller grounds on the same slate.
+ */
+for (const [name, game] of [
+  ['big', 'nfl-401872930'], // MetLife Stadium, 82,500
+  ['small', 'nfl-401872659'], // Lucas Oil Stadium, 62,421
+] as const) {
+  test(`v5: the bowl at a ${name} venue`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openReplay(page, { path: `/game/${game}`, at: 0.5 });
+    await expect.poll(() => page.evaluate(() => !!window.__gridironField), { timeout: 20_000 }).toBe(true);
+    await settle(page);
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: `${OUT}/game-1440-bowl-${name}.png` });
+  });
+}
+
 test('an empty day and the command palette', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openReplay(page, { at: 0 });

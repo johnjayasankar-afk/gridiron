@@ -19,6 +19,18 @@
           "totalOddsUnder": -102,
           "moneylineHome": -245,
           "moneylineAway": 200
+        },
+        {
+          "at": "2026-09-25T02:24:39.656Z",
+          "spreadHome": -4.5,
+          "spreadAway": 4.5,
+          "spreadOddsHome": -112,
+          "spreadOddsAway": -108,
+          "total": 43.5,
+          "totalOddsOver": -105,
+          "totalOddsUnder": -115,
+          "moneylineHome": -238,
+          "moneylineAway": 195
         }
       ]
     }

@@ -106,7 +106,10 @@ export function mergeSummaries(prev: GameSummary, next: GameSummary): GameSummar
      * its roof or its surface, and taking it wholesale would throw away what the
      * scoreboard and the venue document had already found.
      */
-    venue: next.venue && prev.venue && next.venue.name === prev.venue.name ? { ...next.venue, id: next.venue.id ?? prev.venue.id, indoor: next.venue.indoor ?? prev.venue.indoor, grass: next.venue.grass ?? prev.venue.grass } : (next.venue ?? prev.venue),
+    venue:
+      next.venue && prev.venue && next.venue.name === prev.venue.name
+        ? { ...next.venue, id: next.venue.id ?? prev.venue.id, indoor: next.venue.indoor ?? prev.venue.indoor, grass: next.venue.grass ?? prev.venue.grass, image: next.venue.image ?? prev.venue.image, capacity: next.venue.capacity ?? prev.venue.capacity }
+        : (next.venue ?? prev.venue),
     weather: next.weather ?? prev.weather,
     coverage: next.source === 'summary' && prev.coverage.level !== 'unknown' && next.coverage.level === 'unknown' ? prev.coverage : next.coverage,
   };

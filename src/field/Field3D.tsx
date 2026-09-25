@@ -54,7 +54,7 @@ function FieldScene({ track, game, situation, animation, drive, variant, hidden,
       ) : (
         <CardCamera track={track} compact={compact} cutToken={cutToken ?? 0} lift={lift ?? false} reducedMotion={reducedMotion} pointer={pointer} />
       )}
-      {detail && fieldStyle === 'holo' && effects === 'full' && <Stadium animation={animation} homeColor={game.home.color} awayColor={game.away.color} sky={sky} />}
+      {detail && fieldStyle === 'holo' && effects === 'full' && <Stadium animation={animation} homeColor={game.home.color} awayColor={game.away.color} sky={sky} capacity={game.venue?.capacity ?? null} />}
       {detail && <DriveLayer track={drive ?? null} game={game} />}
       <FieldModel league={game.league} home={game.home} away={game.away} level={detail ? 'high' : 'low'} pylons={!compact} style={fieldStyle} sky={sky} surface={surface} />
       {/* The game page only: thirteen cards each running their own weather would be thirteen of these, for drops a pixel across. */}
@@ -71,6 +71,7 @@ function FieldScene({ track, game, situation, animation, drive, variant, hidden,
         style={fieldStyle}
         perspective={detail}
         ballTrack={detail ? ballTrack : null}
+        sky={sky}
       />
     </>
   );

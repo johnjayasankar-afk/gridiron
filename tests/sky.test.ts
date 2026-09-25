@@ -148,7 +148,7 @@ describe('the colour a sky multiplies a surface by', () => {
 describe('the 2D field under its own sky', () => {
   const render = (weather: GameWeather | null, venue: Partial<NonNullable<ReturnType<typeof game>['venue']>> = {}) => {
     const g = game({ id: 'nfl-1' });
-    const withSky = { ...g, weather, venue: { id: '1', name: 'Test Field', city: null, state: null, indoor: null, grass: null, ...venue } };
+    const withSky = { ...g, weather, venue: { id: '1', name: 'Test Field', city: null, state: null, indoor: null, grass: null, image: null, capacity: null, ...venue } };
     return renderToStaticMarkup(createElement(FieldSvg, { game: withSky, situation: withSky.situation }));
   };
 
