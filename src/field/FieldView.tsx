@@ -5,7 +5,7 @@
  * viewer must read (messages, labels) is DOM, passed in as children and layered
  * above the field.
  */
-import { Component, lazy, memo, Suspense, useRef, type ReactNode } from 'react';
+import { Component, lazy, memo, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import type { DriveTrack } from '../../shared/driveTrack';
 import type { GameSummary, Situation } from '../../shared/model';
 import type { PlayAnimation } from '../../shared/playAnimation';
@@ -89,6 +89,8 @@ export const FieldView = memo(function FieldView({ className = '', children, ...
   const mode = useFieldMode();
   const reducedMotion = useReducedMotion();
   const slot = useRef<HTMLDivElement>(null);
+  // Tells the app there is a field on this page, so the shared canvas is built where one is wanted and nowhere else.
+  useEffect(() => useGraphics.getState().registerSlot(), []);
   const near = useNearViewport(slot, scene.variant === 'detail' ? '120px' : '420px');
   const trailFrom = scene.animation && !scene.animation.corrected ? scene.animation.fromYard : null;
 

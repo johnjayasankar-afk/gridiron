@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { Team } from '../../shared/model';
+import { logoAt, logoPixels } from '../../shared/logo';
 import { useIsDark } from '../lib/theme';
 
 /**
@@ -15,7 +16,8 @@ import { useIsDark } from '../lib/theme';
 export function TeamLogo({ team, size = 28, className = '' }: { team: Team; size?: number; className?: string }) {
   const dark = useIsDark();
   const [failed, setFailed] = useState<string | null>(null);
-  const src = dark ? (team.logoDark ?? team.logo) : team.logo;
+  // At the size it is actually drawn, rather than the 500 by 500 the provider serves for everything.
+  const src = logoAt(dark ? (team.logoDark ?? team.logo) : team.logo, logoPixels(size));
   const style = { width: size, height: size, '--team': team.color ?? 'var(--forest)' } as CSSProperties;
 
   if (!src || failed === src) {

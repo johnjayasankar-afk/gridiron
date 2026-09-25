@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-09-25T14:50:00.861Z",
+  "environment": "Production build with Brotli, measured 2.5s after the content appears so the idle preload is included, replay mode, 1440x900",
+  "rows": [
+    {
+      "route": "slate",
+      "files": 49,
+      "totalKB": 562,
+      "logoCount": 21,
+      "logoKB": 90
+    },
+    {
+      "route": "game",
+      "files": 34,
+      "totalKB": 529,
+      "logoCount": 4,
+      "logoKB": 33
+    },
+    {
+      "route": "tape",
+      "files": 25,
+      "totalKB": 259,
+      "logoCount": 0,
+      "logoKB": 0
+    },
+    {
+      "route": "team",
+      "files": 43,
+      "totalKB": 309,
+      "logoCount": 17,
+      "logoKB": 47
+    }
+  ]
+}

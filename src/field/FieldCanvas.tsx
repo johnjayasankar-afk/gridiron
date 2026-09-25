@@ -139,6 +139,12 @@ export function FieldCanvas() {
       key={canvasKey}
       className="field-canvas"
       frameloop="demand"
+      /*
+       * This canvas is fixed to the viewport and never moves with the page, so
+       * it has no use for the scroll listeners react-three-fiber attaches by
+       * default, and nothing to debounce: its size changes when the window's
+       * does and at no other time.
+       */
       flat
       dpr={dpr}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance', stencil: false }}
@@ -146,6 +152,19 @@ export function FieldCanvas() {
       aria-hidden="true"
       onCreated={({ gl }) => {
         gl.setClearColor(0x000000, 0);
+        /*
+         * Reading a shader's info log makes the CPU wait for the GPU to finish
+         * compiling, and three.js does it for every program the first time it is
+         * used. Profiled on the first drag through a game, where new materials
+         * appear for the drive, the trail and the spot: `getProgramInfoLog` and
+         * `getShaderInfoLog` were 34ms of it, and that stall is the hitch.
+         *
+         * Kept on in development, where a shader that fails to compile should
+         * still say so. The field's own patches assert their anchors in
+         * JavaScript before the shader is ever built, so nothing here depends on
+         * the info log to know a patch landed.
+         */
+        gl.debug.checkShaderErrors = import.meta.env.DEV;
         gl.domElement.addEventListener(
           'webglcontextlost',
           (event) => {

@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { markingsFor, NUMBERED_LINES, type FieldMarkings } from '../../shared/fieldMarkings';
 import type { LeagueId, Team } from '../../shared/model';
+import { logoAt } from '../../shared/logo';
 import { accentFor, endZoneTint, luminance, mixColor, withAlpha } from './color';
 import type { FieldStyle } from './style';
 
@@ -532,6 +533,11 @@ export const rainTexture = () => {
  * often its own colour and would vanish on a disc of it.
  */
 const LEATHER = '#7b4a2a';
+/** How much of the midfield canvas the mark itself covers, which is what decides the size to ask the provider for. */
+const MIDFIELD_LOGO_FRACTION = 0.88;
+/** The mark on the ball's skin, in pixels: `min(w * 0.16, h * 0.34) * 0.9` at the skin's own size. */
+const BALL_LOGO_PX = 74;
+
 const BALL_SKIN_W = 512;
 const BALL_SKIN_H = 256;
 
@@ -622,8 +628,10 @@ export function acquireBallSkin(team: Team): THREE.CanvasTexture {
   const key = ballSkinKey(team);
   let entry = ballSkins.get(key);
   const paint = (into: SkinEntry) => {
-    into.logoUrl = team.logo ?? null;
-    paintBallSkin(into.canvas, team, team.logo ? loadLogo(team.logo, () => paint(into)) : null);
+    // The mark is painted about 74 pixels across on the skin, not 500.
+    const url = logoAt(team.logo, BALL_LOGO_PX);
+    into.logoUrl = url;
+    paintBallSkin(into.canvas, team, url ? loadLogo(url, () => paint(into)) : null);
     into.texture.needsUpdate = true;
     notifyChanged();
   };
@@ -727,7 +735,11 @@ export function acquireMidfield(team: Team, style: FieldStyle, level: TextureLev
   let entry = midfields.get(key);
   // The dark variant is the one made for a dark background, which is what the
   // holographic field is.
-  const url = (style === 'holo' ? (team.logoDark ?? team.logo) : team.logo) ?? null;
+  /*
+   * Asked for at the size the mark is painted at rather than at the provider's
+   * full 500, which is more than the canvas it is drawn into on any level.
+   */
+  const url = logoAt(style === 'holo' ? (team.logoDark ?? team.logo) : team.logo, Math.round(MIDFIELD_PX[level] * MIDFIELD_LOGO_FRACTION));
   const paint = (into: NonNullable<typeof entry>) => {
     into.logoUrl = url;
     paintMidfield(into.canvas, team, style, url ? loadLogo(url, () => paint(into)) : null);

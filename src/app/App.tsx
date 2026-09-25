@@ -14,7 +14,7 @@ import { lazyWithPreload, preloadWhenIdle } from '../lib/lazyView';
 import { prefersReducedMotion } from '../lib/motion';
 import { unlockSound } from '../lib/sound';
 import { useResolvedTheme } from '../lib/theme';
-import { useFieldMode, useGraphics } from '../state/graphics';
+import { useFieldMode, useGraphics, useWantsCanvas } from '../state/graphics';
 import { usePrefs } from '../state/prefs';
 import { useUi } from '../state/ui';
 import { FocusView } from '../views/FocusView';
@@ -183,6 +183,7 @@ export function App() {
   const { route } = useLocation();
   const canvasKey = useGraphics((s) => s.canvasKey);
   const fieldMode = useFieldMode();
+  const wantsCanvas = useWantsCanvas();
   const wall = route.name === 'wall';
   const routeKey = route.name === 'game' || route.name === 'team' ? `${route.name}:${route.id}` : route.name;
   const home = () => navigate({ name: 'slate' });
@@ -242,7 +243,7 @@ export function App() {
         </div>
       )}
       {!wall && <Footer />}
-      {fieldMode === '3d' && (
+      {fieldMode === '3d' && wantsCanvas && (
         <CanvasBoundary key={canvasKey}>
           <Suspense fallback={null}>
             <FieldCanvas />
