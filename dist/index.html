@@ -22,6 +22,16 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-title" content="Gridiron" />
+    <!--
+      The provider's own host, which every team mark on the page comes from. The
+      handshake to it was not started until React had rendered and asked for the
+      first logo, about 230ms in; these start it while the HTML is still being
+      parsed. Two of them because there are two kinds of load: the marks in the
+      page are ordinary images, and the one painted into the ball's skin asks for
+      CORS so the texture is not tainted, and the two use different connections.
+    -->
+    <link rel="preconnect" href="https://a.espncdn.com" />
+    <link rel="preconnect" href="https://a.espncdn.com" crossorigin />
     <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/ibm-plex-mono-500.woff2" as="font" type="font/woff2" crossorigin />
     <script src="/theme-init.js"></script>

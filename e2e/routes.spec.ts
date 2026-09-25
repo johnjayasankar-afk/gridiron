@@ -146,3 +146,38 @@ test('a canvas built after the page has laid out still draws', async ({ page }) 
   await expect(page.locator('.field-canvas canvas')).toHaveCount(1, { timeout: 25_000 });
   await expect.poll(async () => (await page.evaluate(() => window.__gridironGraphics?.info()))?.views ?? 0, { timeout: 25_000 }).toBeGreaterThan(0);
 });
+
+test('coming back costs almost nothing', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const open = async () => {
+    await page.goto('/?replay=nfl-week1-sunday&at=0.85&paused=1');
+    await page.locator('.section-live .card, .state-block').first().waitFor({ state: 'visible', timeout: 30_000 });
+    await page.waitForTimeout(2000);
+  };
+  const network = () =>
+    page.evaluate(() => {
+      const list = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
+      const mine = list.filter((r) => new URL(r.name).origin === location.origin && !new URL(r.name).pathname.startsWith('/api/'));
+      const transferred = mine.filter((r) => r.transferSize > 0);
+      return { files: mine.length, fromNetwork: transferred.length, kb: Math.round(transferred.reduce((s, r) => s + r.transferSize, 0) / 1024) };
+    });
+
+  await open();
+  const first = await network();
+  expect(first.fromNetwork, 'a first visit should fetch what it needs').toBeGreaterThan(10);
+
+  /*
+   * And a second visit fetches none of it. The build hashes what it emits, so
+   * those are immutable; the fonts and icons are not hashed and were on
+   * `no-cache` with no validator to revalidate against, which is not a cache
+   * instruction at all but a promise to send the whole file again: 78kB of fonts
+   * on every single visit. They carry a validator and a week now.
+   */
+  await open();
+  const second = await network();
+  expect(second.kb, `a second visit pulled ${second.kb}kB`).toBeLessThanOrEqual(8);
+  expect(second.fromNetwork, `a second visit made ${second.fromNetwork} network fetches`).toBeLessThanOrEqual(3);
+  await context.close();
+});

@@ -1463,6 +1463,13 @@ var TYPES = {
 };
 var COMPRESSIBLE = /* @__PURE__ */ new Set([".html", ".js", ".css", ".json", ".svg", ".webmanifest", ".txt"]);
 var STATIC_PREFIXES = ["/assets/", "/fonts/", "/icons/"];
+var LONG_CACHE = ["/fonts/", "/icons/"];
+var LONG_CACHE_FILES = /* @__PURE__ */ new Set(["/favicon.svg", "/og.png"]);
+var WEEK = 7 * 24 * 60 * 60;
+function etagFor(file) {
+  const stat = statSync(file);
+  return `W/"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
+}
 var DIVISIONS = ["FBS", "FCS", "D2", "D3"];
 function parseInterest(value, fallbackDate) {
   if (typeof value !== "object" || value === null) return null;
@@ -1607,18 +1614,30 @@ data: ${JSON.stringify(data)}
     if (!exists) file = join(root, "index.html");
     const ext = extname(file);
     const immutable = url.pathname.startsWith("/assets/");
+    const longLived = LONG_CACHE.some((prefix) => url.pathname.startsWith(prefix)) || LONG_CACHE_FILES.has(url.pathname);
     const compressible = COMPRESSIBLE.has(ext);
     const accept = String(req.headers["accept-encoding"] ?? "");
     const encoding = compressible && /\bbr\b/.test(accept) && existsSync2(`${file}.br`) ? "br" : compressible && /\bgzip\b/.test(accept) && existsSync2(`${file}.gz`) ? "gzip" : null;
     const served = encoding === "br" ? `${file}.br` : encoding === "gzip" ? `${file}.gz` : file;
+    const etag = etagFor(served);
+    const cacheControl = immutable ? "public, max-age=31536000, immutable" : longLived ? `public, max-age=${WEEK}` : "no-cache";
+    const validators = {
+      etag,
+      "cache-control": cacheControl,
+      ...compressible ? { vary: "accept-encoding" } : {},
+      ...SECURITY_HEADERS
+    };
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, validators);
+      res.end();
+      return;
+    }
     res.writeHead(200, {
       "content-type": TYPES[ext] ?? "application/octet-stream",
-      "cache-control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
       "content-length": String(statSync(served).size),
-      ...compressible ? { vary: "accept-encoding" } : {},
+      ...validators,
       ...encoding ? { "content-encoding": encoding } : {},
-      ...ext === ".html" ? { "content-security-policy": CSP } : {},
-      ...SECURITY_HEADERS
+      ...ext === ".html" ? { "content-security-policy": CSP } : {}
     });
     if (req.method === "HEAD") {
       res.end();

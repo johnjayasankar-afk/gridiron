@@ -92,6 +92,24 @@ const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.json', '.svg', '.webmani
 /** Paths that only ever hold real files: a miss is a 404, never the app shell. */
 const STATIC_PREFIXES = ['/assets/', '/fonts/', '/icons/'];
 
+/**
+ * Files a deploy does not change. The build hashes what it emits into /assets,
+ * so those are immutable; the fonts and icons are checked in and replaced only
+ * when somebody replaces them, which in practice is never. They were on
+ * `no-cache` with no validator to revalidate against, so every visit downloaded
+ * 78kB of fonts again in full. A week is the compromise: no request at all for
+ * a week, and a week of the old file in the rare event one is swapped.
+ */
+const LONG_CACHE = ['/fonts/', '/icons/'];
+const LONG_CACHE_FILES = new Set(['/favicon.svg', '/og.png']);
+const WEEK = 7 * 24 * 60 * 60;
+
+/** A validator, so a revalidation costs a round trip rather than the whole file. */
+function etagFor(file: string): string {
+  const stat = statSync(file);
+  return `W/"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
+}
+
 const DIVISIONS: Division[] = ['FBS', 'FCS', 'D2', 'D3'];
 
 export function parseInterest(value: unknown, fallbackDate: string): ClientInterest | null {
@@ -251,19 +269,37 @@ export function createApp(options: AppOptions) {
     if (!exists) file = join(root, 'index.html'); // client-side routes
     const ext = extname(file);
     const immutable = url.pathname.startsWith('/assets/');
+    const longLived = LONG_CACHE.some((prefix) => url.pathname.startsWith(prefix)) || LONG_CACHE_FILES.has(url.pathname);
     const compressible = COMPRESSIBLE.has(ext);
     const accept = String(req.headers['accept-encoding'] ?? '');
     // Checked per request, not cached, so a rebuild under a running server never serves a stale length.
     const encoding = compressible && /\bbr\b/.test(accept) && existsSync(`${file}.br`) ? 'br' : compressible && /\bgzip\b/.test(accept) && existsSync(`${file}.gz`) ? 'gzip' : null;
     const served = encoding === 'br' ? `${file}.br` : encoding === 'gzip' ? `${file}.gz` : file;
+    // Per representation, because `vary: accept-encoding` means the compressed file is a different one.
+    const etag = etagFor(served);
+    const cacheControl = immutable ? 'public, max-age=31536000, immutable' : longLived ? `public, max-age=${WEEK}` : 'no-cache';
+    const validators = {
+      etag,
+      'cache-control': cacheControl,
+      ...(compressible ? { vary: 'accept-encoding' } : {}),
+      ...SECURITY_HEADERS,
+    };
+    /*
+     * The shell and the service worker stay on `no-cache`, which means revalidate
+     * rather than never cache. Without a validator there was nothing to
+     * revalidate against and every one of them came back in full.
+     */
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, validators);
+      res.end();
+      return;
+    }
     res.writeHead(200, {
       'content-type': TYPES[ext] ?? 'application/octet-stream',
-      'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
       'content-length': String(statSync(served).size),
-      ...(compressible ? { vary: 'accept-encoding' } : {}),
+      ...validators,
       ...(encoding ? { 'content-encoding': encoding } : {}),
       ...(ext === '.html' ? { 'content-security-policy': CSP } : {}),
-      ...SECURITY_HEADERS,
     });
     if (req.method === 'HEAD') {
       res.end();
