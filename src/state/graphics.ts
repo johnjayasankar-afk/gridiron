@@ -50,7 +50,10 @@ export const useGraphics = create<GraphicsState>()((set, get) => ({
 }));
 
 /** '3d' when the shared canvas can draw; '2d' for the low-power setting, no WebGL, or a lost context. */
-export function useFieldMode(): '3d' | '2d' {
+/** Whether fields draw in the shared WebGL canvas or as SVG. */
+export type FieldMode = '3d' | '2d';
+
+export function useFieldMode(): FieldMode {
   const effects = usePrefs((s) => s.effects);
   const status = useGraphics((s) => s.status);
   return effects !== 'flat' && status === 'ok' ? '3d' : '2d';

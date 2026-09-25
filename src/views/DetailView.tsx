@@ -526,6 +526,20 @@ export function DetailView({ id }: { id: string }) {
   useFieldSound(frame ? frameAnimation : liveMoment.animation);
   // The weather the provider reports at this venue, which is what lights the field.
   const skyCaption = skyLabel(skyFor(game?.weather, game?.venue?.indoor));
+  /*
+   * The game as it stood at the play being looked at, which is what the
+   * scoreboard and the scorebug read. Everything else on the page keeps the real
+   * game: the title, the links, the venue and the navigation are facts about the
+   * fixture rather than about a moment in it.
+   *
+   * Up here for the reason the comment above gives, and it was not: sitting
+   * below the early returns, it went uncalled on every render that had no game
+   * yet and then ran on the first one that did, which is one hook more than the
+   * render before it. React counts them, and the whole page came down with
+   * "Rendered more hooks than during the previous render" on any cold load that
+   * drew once before the summary arrived.
+   */
+  const shownGameOrNull = useMemo(() => (game ? gameAtFrame(game, frame) : null), [game, frame]);
 
   if (!valid) {
     return (
@@ -556,13 +570,8 @@ export function DetailView({ id }: { id: string }) {
   const live = isLiveOrPaused(game.status.kind);
   const stale = staleGames(world, connectionDown).has(id);
   const fieldSituation = frame ? frame.situation : liveSituation.situation;
-  /*
-   * The game as it stood at the play being looked at, which is what the
-   * scoreboard and the scorebug read. Everything else on the page keeps the real
-   * game: the title, the links, the venue and the navigation are facts about the
-   * fixture rather than about a moment in it.
-   */
-  const shownGame = useMemo(() => gameAtFrame(game!, frame), [game, frame]);
+  // Non-null from here down, because `game` is: see where it is built, above the early returns.
+  const shownGame = shownGameOrNull ?? game;
   const hasSpot = !!fieldSituation && fieldSituation.spot.schematicYard !== null && (frame !== null || live);
   const message = frame ? (hasSpot ? null : 'Ball spot unavailable for this play') : fieldMessage(game, hasSpot);
 

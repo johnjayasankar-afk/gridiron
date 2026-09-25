@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { liveCards, openMenuItem, openReplay } from './helpers';
+import { liveCards, openMenuItem, openReplay, seedPrefs } from './helpers';
 import type { FieldProbe } from '../src/field/probe';
 
 /**
@@ -510,6 +510,40 @@ test.describe('the sky over the field', () => {
     await expect(page.locator('.situation-panel')).toContainText('Historical view');
     await expect(bug.locator('.bug-state')).toHaveCount(0);
     await expect(bug.locator('.bug-time')).toHaveText('15:00');
+  });
+
+  test('a field that cannot draw itself does not take the game page with it', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const crashes: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error' && m.text().includes('a view failed to render')) crashes.push(m.text());
+    });
+    await seedPrefs(page, { effects: 'flat' });
+    await openReplay(page, { path: '/game/nfl-401872925', scenario: 'nfl-week1-sunday', at: 0.9 });
+    await expect(page.locator('.scoreboard')).toBeVisible();
+
+    /*
+     * In 2D by preference rather than by losing the context, which reaches the
+     * same branch and leaves the GPU alone. An earlier version of this test lost
+     * a real context here, and measurably destabilised the rest of the file: run
+     * with it, one of the ball flight or weather journeys failed on each of two
+     * runs and a different one each time; run without it the same twenty passed.
+     * Losing a context takes the GPU process down for every worker sharing it.
+     * The real `webglcontextlost` wiring has its own journey in settings.spec.
+     */
+    await expect(page.locator('.field-slot').first()).toHaveAttribute('data-field-mode', '2d');
+
+    // The page is still a game page: the board, the bug and the replay controls all stand.
+    await expect(page.locator('.view-error')).toHaveCount(0);
+    await expect(page.locator('.scoreboard')).toBeVisible();
+    await expect(page.locator('.score-bug')).toBeVisible();
+
+    // And it still rewinds, which is the whole point of it still being here.
+    await page.getByRole('button', { name: 'First play of the game' }).click();
+    await expect(page.locator('.situation-panel')).toContainText('Historical view');
+    expect((await page.locator('.scoreboard .sb-score').allInnerTexts()).join('-')).toBe('0-0');
+    expect((await page.locator('.score-bug .bug-score').allInnerTexts()).join('-')).toBe('0-0');
+    expect(crashes, 'the view boundary caught something').toEqual([]);
   });
 
   test('a game the provider reported no weather for is lit exactly as it always was', async ({ page }) => {
