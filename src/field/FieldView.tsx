@@ -5,7 +5,7 @@
  * viewer must read (messages, labels) is DOM, passed in as children and layered
  * above the field.
  */
-import { Component, lazy, memo, Suspense, useEffect, useRef, type ReactNode } from 'react';
+import { Component, lazy, memo, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DriveTrack } from '../../shared/driveTrack';
 import type { GameSummary, Situation } from '../../shared/model';
 import type { PlayAnimation } from '../../shared/playAnimation';
@@ -14,7 +14,7 @@ import { useNearViewport, useReducedMotion } from '../lib/motion';
 import { useFieldMode, useGraphics, type FieldMode } from '../state/graphics';
 import type { CameraPreset } from './cameras';
 import { FieldSvg } from './FieldSvg';
-import type { PointerState } from './frameBus';
+import { fieldFramesDrawn, onFieldFrameDrawn, requestFieldFrame, type PointerState } from './frameBus';
 
 export type FieldVariant = 'card' | 'compact' | 'detail';
 
@@ -92,6 +92,37 @@ export const FieldView = memo(function FieldView({ className = '', children, ...
   // Tells the app there is a field on this page, so the shared canvas is built where one is wanted and nowhere else.
   useEffect(() => useGraphics.getState().registerSlot(), []);
   const near = useNearViewport(slot, scene.variant === 'detail' ? '120px' : '420px');
+
+  /*
+   * The flat field stands in until the canvas has actually painted this view,
+   * and then gets out of the way. It has to leave, rather than sit underneath:
+   * the 3D field is drawn in perspective and does not fill its box to the
+   * corners, so anything left behind it shows around the edges as a second,
+   * flatter field.
+   *
+   * Two drawn frames, not one. The frame that mounts a view is often the frame
+   * that clears its rectangle; the next one is the first with a field in it.
+   */
+  const [painted, setPainted] = useState(false);
+  const live = mode === '3d' && near;
+  useEffect(() => {
+    if (!live) {
+      setPainted(false);
+      return;
+    }
+    const from = fieldFramesDrawn();
+    let done = false;
+    const check = () => {
+      if (done || fieldFramesDrawn() < from + 2) return;
+      done = true;
+      setPainted(true);
+    };
+    const off = onFieldFrameDrawn(check);
+    requestFieldFrame();
+    return () => {
+      off();
+    };
+  }, [live, scene.game.id]);
   const trailFrom = scene.animation && !scene.animation.corrected ? scene.animation.fromYard : null;
 
   /*
@@ -152,7 +183,7 @@ export const FieldView = memo(function FieldView({ className = '', children, ...
           * Both appear in the same commit, the flat one paints immediately
           * because it is DOM, and the 3D one paints over it on the next frame.
           */}
-        {mode === '2d' ? flat : near ? bare : null}
+        {mode === '2d' ? flat : live && !painted ? bare : null}
         {mode === '3d' && near ? (
           <Suspense fallback={null}>
             <Field3D {...scene} reducedMotion={reducedMotion} />

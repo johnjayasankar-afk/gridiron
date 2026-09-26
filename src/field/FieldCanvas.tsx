@@ -9,7 +9,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { useFieldMode, useGraphics } from '../state/graphics';
 import { usePrefs } from '../state/prefs';
-import { registerFieldFrameRequester } from './frameBus';
+import { noteFieldFrameDrawn, onFieldFrameDrawn, registerFieldFrameRequester } from './frameBus';
 import { onFieldTexturesChanged } from './textures';
 
 export interface GraphicsInfo {
@@ -42,6 +42,48 @@ declare global {
  */
 function Invalidator() {
   const invalidate = useThree((s) => s.invalidate);
+  const canvas = useThree((s) => s.gl.domElement);
+
+  /*
+   * Hold the drawn fields on their cards between frames.
+   *
+   * The canvas is fixed to the viewport and each field is scissored to its
+   * card's rectangle, so a frame is only correct for the scroll position it was
+   * drawn at. The page keeps scrolling after that, on the compositor, whether
+   * or not this thread manages another frame, and every pixel the canvas is
+   * showing belongs further and further up the page. That is the field sitting
+   * still while the card slides away from under it.
+   *
+   * Nothing can make a WebGL frame cheap enough to guarantee one per scrolled
+   * pixel. But the drawn frame is still right, just in the wrong place, and
+   * moving it is a transform: no layout, no paint, no redraw, and cheap enough
+   * to keep up where a redraw cannot. So the canvas is offset by however far
+   * the page has scrolled since the frame it is showing, which puts every field
+   * back on its card, and the offset returns to zero the moment a new frame
+   * lands.
+   */
+  useEffect(() => {
+    let drawnAt = window.scrollY || 0;
+    let offset = 0;
+    const put = (value: number) => {
+      if (value === offset) return;
+      offset = value;
+      canvas.style.transform = value ? `translate3d(0, ${value}px, 0)` : '';
+    };
+    const hold = () => put(drawnAt - (window.scrollY || 0));
+    const settled = () => {
+      drawnAt = window.scrollY || 0;
+      put(0);
+    };
+    const offDrawn = onFieldFrameDrawn(settled);
+    window.addEventListener('scroll', hold, { passive: true, capture: true });
+    return () => {
+      offDrawn();
+      window.removeEventListener('scroll', hold, { capture: true });
+      canvas.style.transform = '';
+    };
+  }, [canvas]);
+
   useEffect(() => {
     let trailing: ReturnType<typeof setTimeout>[] = [];
     const request = () => {
@@ -146,6 +188,7 @@ function AdaptiveResolution() {
     const list = samples.current;
     list.push(performance.now() - started.current);
     framesDrawn++;
+    noteFieldFrameDrawn();
     if (list.length < 24) return;
     const average = list.reduce((a, b) => a + b, 0) / list.length;
     averageFrameMs = Math.round(average * 100) / 100;
