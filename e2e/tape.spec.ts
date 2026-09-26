@@ -10,6 +10,22 @@ import { control, expectNoHorizontalOverflow, liveCards, openReplay } from './he
  * A seeded tape is deliberately not used. The view only draws games on the day
  * being presented, so invented ids are filtered out exactly as they should be.
  */
+/*
+ * A note on why this file is flaky in a parallel run, which it is and was before
+ * these journeys were added.
+ *
+ * Every journey here opens its own replay session at sixty times speed and then
+ * waits up to thirty seconds for the recording to produce lanes. Sessions are not
+ * closed at the end of a test and live for fifteen idle minutes, so by the end of
+ * a suite the server is advancing a dozen replays at sixty times speed at once
+ * and the newest one starves. Measured across both browser projects at two
+ * workers: four of these journeys failed with no lanes recorded, a different four
+ * on the next run, and every one of them passes alone.
+ *
+ * Making the file serial was tried and is worse: the first failure then skips the
+ * rest. The real fix is for `openReplay` to end its session when a test finishes,
+ * which is a change to a helper every spec uses and is not made here.
+ */
 async function openTape(page: Page, at: number): Promise<string> {
   const session = await openReplay(page, { at, paused: false, speed: 60 });
   await expect(liveCards(page).first()).toBeVisible();
@@ -298,3 +314,72 @@ test.describe('the tape', () => {
     await expect(page.locator(`.card[data-game="${silent}"] .tape-pulse`)).toHaveCount(0);
   });
 });
+
+/**
+ * The recording is kept in session storage and dies with the tab, so a file is
+ * the only way a day survives or reaches anyone else. The round trip is the
+ * journey worth holding: written, read back, and shown as what it is.
+ */
+test.describe('a day as a file', () => {
+  test('writes the day, reads it back, and says whose recording it is', async ({ page }) => {
+    await openTape(page, 0.35);
+
+    // Capture what the download would hold, rather than downloading it.
+    const text = await page.evaluate(async () => {
+      let blob: Blob | null = null;
+      const create = URL.createObjectURL;
+      const click = HTMLAnchorElement.prototype.click;
+      URL.createObjectURL = (b: Blob) => ((blob = b), 'blob:captured');
+      HTMLAnchorElement.prototype.click = function () {};
+      document.querySelectorAll('button').forEach((b) => { if (/Save this day/.test(b.textContent ?? '')) b.click(); });
+      await new Promise((r) => setTimeout(r, 200));
+      URL.createObjectURL = create;
+      HTMLAnchorElement.prototype.click = click;
+      return blob ? await (blob as Blob).text() : '';
+    });
+
+    const file = JSON.parse(text);
+    expect(file.format).toBe('gridiron.tape');
+    expect(file.origin, 'a tape this browser recorded is a device tape').toBe('device');
+    expect(file.order.length).toBeGreaterThan(1);
+    expect(file.build).toBeTruthy();
+
+    // Feed it straight back in.
+    await page.setInputFiles('.tape__tools input[type=file]', { name: 'tape.json', mimeType: 'application/json', buffer: Buffer.from(text) });
+    const banner = page.locator('.tape__imported:not(.tape__imported--bad)');
+    await expect(banner).toBeVisible();
+    await expect(banner, 'an imported tape has to say it was recorded elsewhere').toContainText('an imported tape');
+    await expect(banner).toContainText('another device');
+    await expect(page.locator('.tape-lane').first()).toBeVisible();
+    // Saving is not offered for somebody else's recording.
+    await expect(page.getByRole('button', { name: 'Save this day' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Back to this device' }).click();
+    await expect(banner).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save this day' })).toBeVisible();
+  });
+
+  test('refuses a file it cannot vouch for, and says why', async ({ page }) => {
+    /*
+     * On an empty tape, which is where somebody most wants to open a saved day
+     * and also costs this suite no replay session of its own. The tape tests are
+     * the heaviest journeys here and a second 60x replay for this was enough to
+     * make the whole file miss its lanes under two workers.
+     */
+    await page.goto('/tape');
+    await expect(page.getByRole('heading', { name: 'The tape' })).toBeVisible();
+    for (const [body, says] of [
+      ['not json at all', 'not JSON'],
+      ['{"hello":"world"}', 'not a Gridiron tape'],
+    ] as const) {
+      await page.setInputFiles('.tape__tools input[type=file]', { name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from(body) });
+      const bad = page.locator('.tape__imported--bad');
+      await expect(bad).toBeVisible();
+      await expect(bad).toContainText(says);
+      await bad.getByRole('button', { name: 'Dismiss' }).click();
+    }
+    // And nothing was shown as a tape.
+    await expect(page.locator('.tape__imported:not(.tape__imported--bad)')).toHaveCount(0);
+  });
+});
+

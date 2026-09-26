@@ -451,6 +451,12 @@ function ordinal(n) {
   const v = n % 100;
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 }
+function periodShort(period, regulationPeriods = 4) {
+  if (period === null || !Number.isFinite(period) || period < 1) return null;
+  if (period <= regulationPeriods) return `Q${period}`;
+  const ot = period - regulationPeriods;
+  return ot === 1 ? "OT" : `${ot}OT`;
+}
 var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 function easternDateKey(date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -1295,7 +1301,7 @@ function loadConfig(env = process.env, root = process.cwd()) {
 }
 
 // server/http.ts
-import { createReadStream, existsSync as existsSync2, statSync } from "node:fs";
+import { createReadStream, existsSync as existsSync2, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize, resolve as resolve2 } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -1434,7 +1440,143 @@ function sameOrigin(req) {
   return hosts.includes(host);
 }
 
+// shared/field.ts
+var FIELD = {
+  playing: 100,
+  endZone: 10,
+  total: 120,
+  width: 160 / 3
+  // 53 1/3 yards
+};
+var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function labelFromProgress(progress, offense, teams2) {
+  const p = Math.round(clamp(progress, 0, 100));
+  if (p === 50) return "50";
+  const offenseAbbr = teams2[offense].abbreviation;
+  const defenseAbbr = teams2[offense === "home" ? "away" : "home"].abbreviation;
+  if (p === 0) return `${offenseAbbr} goal line`;
+  if (p === 100) return `${defenseAbbr} goal line`;
+  return p < 50 ? `${offenseAbbr} ${p}` : `${defenseAbbr} ${100 - p}`;
+}
+function progressFromSchematicYard(yard, offense) {
+  return offense === "away" ? yard : 100 - yard;
+}
+var HASH_LATERAL = {
+  nfl: [70.75 / 160, 1 - 70.75 / 160],
+  cfb: [60 / 160, 1 - 60 / 160]
+};
+
+// shared/format.ts
+var SPOT_UNAVAILABLE = "Ball spot unavailable";
+function teamFor(game, side) {
+  return side === "home" ? game.home : side === "away" ? game.away : null;
+}
+function downDistance(s) {
+  if (!s || s.down === null) return null;
+  if (s.goalToGo) return `${ordinal(s.down)} & Goal`;
+  if (s.distance === null) return ordinal(s.down);
+  return `${ordinal(s.down)} & ${s.distance}`;
+}
+function spotLabel(spot, game) {
+  if (!spot || spot.schematicYard === null) return SPOT_UNAVAILABLE;
+  if (spot.offense && spot.progress !== null) return labelFromProgress(spot.progress, spot.offense, { home: game.home, away: game.away });
+  return spot.label ?? SPOT_UNAVAILABLE;
+}
+function statusShort(status) {
+  const p = periodShort(status.period, status.regulationPeriods);
+  switch (status.kind) {
+    case "scheduled":
+      return "Scheduled";
+    case "in_progress":
+      return [p, status.clock].filter(Boolean).join(" ") || "In progress";
+    case "halftime":
+      return "Halftime";
+    case "end_of_period":
+      return p ? `End ${p}` : "End of period";
+    case "delayed":
+      return p ? `Delayed \xB7 ${p}` : "Delayed";
+    case "suspended":
+      return "Suspended";
+    case "final":
+      return status.period !== null && status.period > status.regulationPeriods ? `Final/${periodShort(status.period, status.regulationPeriods)}` : "Final";
+    case "postponed":
+      return "Postponed";
+    case "canceled":
+      return "Canceled";
+    default:
+      return status.detail ?? "Status unknown";
+  }
+}
+function kickoffLabel(startTime, timeZone) {
+  if (!startTime) return "Kickoff time not reported";
+  const d = new Date(startTime);
+  if (Number.isNaN(d.getTime())) return "Kickoff time not reported";
+  return new Intl.DateTimeFormat(void 0, { weekday: "short", hour: "numeric", minute: "2-digit", timeZone }).format(d);
+}
+function scoreText(game) {
+  const a = game.score.away;
+  const h = game.score.home;
+  if (a === null || h === null) return `${game.away.abbreviation} at ${game.home.abbreviation}`;
+  return `${game.away.abbreviation} ${a}, ${game.home.abbreviation} ${h}`;
+}
+function leader(game) {
+  const { home, away } = game.score;
+  if (home === null || away === null) return null;
+  return home === away ? "tied" : home > away ? "home" : "away";
+}
+
+// server/shellMeta.ts
+function shellRoute(pathname) {
+  const game = /^\/game\/([^/]+)\/?$/.exec(pathname);
+  if (game) return { kind: "game", id: decodeURIComponent(game[1]) };
+  const team = /^\/team\/([^/]+)\/?$/.exec(pathname);
+  if (team) return { kind: "team", id: decodeURIComponent(team[1]) };
+  return null;
+}
+function tidy(parts, limit = 200) {
+  const s = parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  return s.length <= limit ? s : `${s.slice(0, limit - 1).trimEnd()}\u2026`;
+}
+function gameMeta(game) {
+  const teams2 = `${game.away.displayName} at ${game.home.displayName}`;
+  const status = statusShort(game.status);
+  const scored = game.score.away !== null && game.score.home !== null;
+  const title = scored ? `${scoreText(game)} \xB7 ${status} \xB7 Gridiron` : `${game.away.abbreviation} at ${game.home.abbreviation} \xB7 ${status} \xB7 Gridiron`;
+  const where = game.venue?.name ? `at ${game.venue.name}` : null;
+  const when = game.status.kind === "scheduled" ? `Kickoff ${kickoffLabel(game.startTime)}.` : null;
+  const now = scored ? `${scoreText(game)}, ${status}.` : `${status}.`;
+  const coverage = game.coverage.level === "score-only" ? "The provider reports the score only for this game: no play-by-play, drives or win probability." : "A 3D field with the reported ball spot, beside the score, win probability and odds from named sources.";
+  const closing = isOver(game.status.kind) ? "Drive replay, game flow and play-by-play, as reported." : null;
+  return { title, description: tidy([teams2, where ? `${where}.` : null, when, when ? null : now, coverage, closing]) };
+}
+function teamMeta(team) {
+  return {
+    title: `${team.displayName} \xB7 Gridiron`,
+    description: tidy([`${team.displayName}${team.record ? ` (${team.record})` : ""} on Gridiron:`, "their schedule and results, each game with a 3D field of the reported ball spot, win probability and odds from named sources."])
+  };
+}
+function attr(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function injectShellMeta(html, meta) {
+  const title = attr(meta.title);
+  const description = attr(meta.description);
+  let out = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`);
+  const setMeta = (key, value) => {
+    const re = new RegExp(`(<meta\\b[^>]*\\b(?:property|name)\\s*=\\s*"${key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}"[^>]*\\bcontent\\s*=\\s*")[^"]*(")`, "i");
+    if (re.test(out)) out = out.replace(re, `$1${value}$2`);
+  };
+  setMeta("description", description);
+  setMeta("og:title", title);
+  setMeta("og:description", description);
+  setMeta("twitter:title", title);
+  setMeta("twitter:description", description);
+  if (meta.url) setMeta("og:url", attr(meta.url));
+  return out;
+}
+
 // server/http.ts
+var SITE_ORIGIN = (process.env.GRIDIRON_ORIGIN ?? "").replace(/\/+$/, "");
 var CSP = [
   "default-src 'self'",
   "script-src 'self'",
@@ -1592,7 +1734,33 @@ data: ${JSON.stringify(data)}
     }
     return send(res, 404, { error: "Not found" });
   }
-  function serveStatic(req, res, url) {
+  async function shellFor(url, _unused) {
+    const route = shellRoute(url.pathname);
+    if (!route || !options.staticDir) return null;
+    const shell = join(resolve2(options.staticDir), "index.html");
+    if (!existsSync2(shell)) return null;
+    const absolute = SITE_ORIGIN ? `${SITE_ORIGIN}${url.pathname}` : void 0;
+    try {
+      let meta = null;
+      if (route.kind === "game") {
+        const game = options.engine.knownSummary(route.id);
+        if (game) meta = gameMeta(game);
+      } else if (options.teams) {
+        const dash = route.id.indexOf("-");
+        const league = dash > 0 ? route.id.slice(0, dash) : "";
+        const id = dash > 0 ? route.id.slice(dash + 1) : "";
+        if (league && id) {
+          const lookup = await options.teams.get(league, id, {});
+          if (lookup.ok) meta = teamMeta({ displayName: lookup.page.team.displayName, abbreviation: lookup.page.team.abbreviation, record: lookup.page.team.record.total });
+        }
+      }
+      if (!meta) return null;
+      return injectShellMeta(readFileSync(shell, "utf8"), { ...meta, ...absolute ? { url: absolute } : {} });
+    } catch {
+      return null;
+    }
+  }
+  async function serveStatic(req, res, url) {
     const dir = options.staticDir;
     if (!dir) {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8", ...SECURITY_HEADERS });
@@ -1612,6 +1780,18 @@ data: ${JSON.stringify(data)}
       return;
     }
     if (!exists) file = join(root, "index.html");
+    const described = !exists ? await shellFor(url, null) : null;
+    if (described !== null) {
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-length": String(Buffer.byteLength(described)),
+        "cache-control": "no-cache",
+        "content-security-policy": CSP,
+        ...SECURITY_HEADERS
+      });
+      res.end(req.method === "HEAD" ? void 0 : described);
+      return;
+    }
     const ext = extname(file);
     const immutable = url.pathname.startsWith("/assets/");
     const longLived = LONG_CACHE.some((prefix) => url.pathname.startsWith(prefix)) || LONG_CACHE_FILES.has(url.pathname);
@@ -1698,7 +1878,7 @@ data: ${JSON.stringify(data)}
         return await api(req, res, url, engine2, `/api/replay/s/${id}`, id);
       }
       if (url.pathname.startsWith("/api/")) return await api(req, res, url, options.engine, "/api", null);
-      if (req.method === "GET" || req.method === "HEAD") return serveStatic(req, res, url);
+      if (req.method === "GET" || req.method === "HEAD") return await serveStatic(req, res, url);
       return send(res, 405, { error: "Method not allowed" });
     } catch (e) {
       if (!res.headersSent) send(res, 500, { error: "Server error", detail: e.message });
@@ -2451,7 +2631,7 @@ data: ${JSON.stringify(event)}
 }
 
 // server/providers/espn/provider.ts
-import { existsSync as existsSync3, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync as existsSync3, mkdirSync, readFileSync as readFileSync2, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 // server/providers/espn/raw.ts
@@ -2570,32 +2750,6 @@ function seasonForDate(scoreboard, dateKey) {
   }
   return null;
 }
-
-// shared/field.ts
-var FIELD = {
-  playing: 100,
-  endZone: 10,
-  total: 120,
-  width: 160 / 3
-  // 53 1/3 yards
-};
-var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-function labelFromProgress(progress, offense, teams2) {
-  const p = Math.round(clamp(progress, 0, 100));
-  if (p === 50) return "50";
-  const offenseAbbr = teams2[offense].abbreviation;
-  const defenseAbbr = teams2[offense === "home" ? "away" : "home"].abbreviation;
-  if (p === 0) return `${offenseAbbr} goal line`;
-  if (p === 100) return `${defenseAbbr} goal line`;
-  return p < 50 ? `${offenseAbbr} ${p}` : `${defenseAbbr} ${100 - p}`;
-}
-function progressFromSchematicYard(yard, offense) {
-  return offense === "away" ? yard : 100 - yard;
-}
-var HASH_LATERAL = {
-  nfl: [70.75 / 160, 1 - 70.75 / 160],
-  cfb: [60 / 160, 1 - 60 / 160]
-};
 
 // server/providers/espn/classify.ts
 var RULES = [
@@ -4811,7 +4965,7 @@ var EspnProvider = class {
     const file = this.options.coverageCacheFile;
     if (!file || !existsSync3(file)) return;
     try {
-      const data = JSON.parse(readFileSync(file, "utf8"));
+      const data = JSON.parse(readFileSync2(file, "utf8"));
       for (const item of arr(data)) {
         const c = obj(item);
         const season = num(c?.season);
@@ -6075,37 +6229,9 @@ var DEFAULT_PUSH_KINDS = ["touchdown", "field_goal", "turnover", "lead_change", 
 
 // server/push/store.ts
 import { createHash, ECDH, randomBytes as randomBytes3 } from "node:crypto";
-import { readFileSync as readFileSync2 } from "node:fs";
+import { readFileSync as readFileSync3 } from "node:fs";
 import { mkdir, open, rename, rm } from "node:fs/promises";
 import { dirname as dirname2, join as join2 } from "node:path";
-
-// shared/format.ts
-var SPOT_UNAVAILABLE = "Ball spot unavailable";
-function teamFor(game, side) {
-  return side === "home" ? game.home : side === "away" ? game.away : null;
-}
-function downDistance(s) {
-  if (!s || s.down === null) return null;
-  if (s.goalToGo) return `${ordinal(s.down)} & Goal`;
-  if (s.distance === null) return ordinal(s.down);
-  return `${ordinal(s.down)} & ${s.distance}`;
-}
-function spotLabel(spot, game) {
-  if (!spot || spot.schematicYard === null) return SPOT_UNAVAILABLE;
-  if (spot.offense && spot.progress !== null) return labelFromProgress(spot.progress, spot.offense, { home: game.home, away: game.away });
-  return spot.label ?? SPOT_UNAVAILABLE;
-}
-function scoreText(game) {
-  const a = game.score.away;
-  const h = game.score.home;
-  if (a === null || h === null) return `${game.away.abbreviation} at ${game.home.abbreviation}`;
-  return `${game.away.abbreviation} ${a}, ${game.home.abbreviation} ${h}`;
-}
-function leader(game) {
-  const { home, away } = game.score;
-  if (home === null || away === null) return null;
-  return home === away ? "tied" : home > away ? "home" : "away";
-}
 
 // shared/alerts.ts
 var ALERT_KINDS = [
@@ -6894,7 +7020,7 @@ var PushStore = class {
     if (!this.file) return;
     let text2;
     try {
-      text2 = readFileSync2(this.file, "utf8");
+      text2 = readFileSync3(this.file, "utf8");
     } catch (e) {
       if (e.code !== "ENOENT") this.log(`could not read saved push subscriptions: ${e.message}`);
       return;
@@ -7645,7 +7771,7 @@ var PushService = class {
 
 // server/push/vapid.ts
 import { createECDH as createECDH2, randomBytes as randomBytes4 } from "node:crypto";
-import { closeSync, fsyncSync, linkSync, mkdirSync as mkdirSync2, openSync, readFileSync as readFileSync3, rmSync, writeSync } from "node:fs";
+import { closeSync, fsyncSync, linkSync, mkdirSync as mkdirSync2, openSync, readFileSync as readFileSync4, rmSync, writeSync } from "node:fs";
 import { dirname as dirname3, join as join3 } from "node:path";
 var VAPID_FILE = "vapid.json";
 var DEFAULT_VAPID_SUBJECT = "https://labs.johnjayasankar.com/";
@@ -7674,7 +7800,7 @@ var code = (e) => e.code ?? "error";
 function readKeyFile(file) {
   let text2;
   try {
-    text2 = readFileSync3(file, "utf8");
+    text2 = readFileSync4(file, "utf8");
   } catch (e) {
     return code(e) === "ENOENT" ? null : { error: `${VAPID_FILE} in the cache directory could not be read (${code(e)})` };
   }
@@ -7863,7 +7989,7 @@ function detailWithLateral(detail, laterals) {
 }
 
 // server/replay/scenarios.ts
-import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
+import { existsSync as existsSync4, readFileSync as readFileSync5 } from "node:fs";
 import { join as join4 } from "node:path";
 
 // server/replay/timeline.ts
@@ -8160,7 +8286,7 @@ var FixtureStore = class {
   json(rel) {
     if (!this.cache.has(rel)) {
       const file = join4(this.dir, rel);
-      this.cache.set(rel, existsSync4(file) ? JSON.parse(readFileSync4(file, "utf8")) : null);
+      this.cache.set(rel, existsSync4(file) ? JSON.parse(readFileSync5(file, "utf8")) : null);
     }
     return this.cache.get(rel) ?? null;
   }

@@ -29,7 +29,17 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 - [Licensed providers](#licensed-providers)
 - [Accessibility and privacy](#accessibility-and-privacy)
 - [Project layout](#project-layout)
+- [The shared boundary](#the-shared-boundary)
 - [Testing](#testing)
+- [License](#license)
+
+Beside this file, in `docs/`:
+
+- **[CASE_STUDY.md](docs/CASE_STUDY.md)** is the short version: the four decisions that define the product, each with what it cost and what it bought. Start here if you are deciding whether to read the rest.
+- [DEPLOYMENT_DECISION.md](docs/DEPLOYMENT_DECISION.md) works out where this should be deployed, and why the answer is a persistent server.
+- [PROPOSALS.md](docs/PROPOSALS.md) argues whether there should ever be a second sport, counting what is actually football-shaped before arguing about it.
+- [TAPE_PERSISTENCE.md](docs/TAPE_PERSISTENCE.md) designs where the tape's recording should live, before any of it is built.
+- [PROVIDERS.md](docs/PROVIDERS.md), [VERIFICATION.md](docs/VERIFICATION.md) and [CHECKLIST.md](docs/CHECKLIST.md) are the provider interface, the verification report and the completion checklist.
 
 ## What is in it
 
@@ -240,7 +250,7 @@ Every setting is optional. [.env.example](.env.example) lists them all with comm
 | `GRIDIRON_CACHE_DIR` | `.cache` | Keeps discovered college divisions, the generated push keys and push subscriptions between restarts; `off` disables |
 | `GRIDIRON_FETCH_TIMEOUT_MS` | `9000` | Per-request provider timeout |
 | `GRIDIRON_FETCH_CONCURRENCY` | `6` | Concurrent provider requests |
-| `GRIDIRON_FETCH_BUDGET` | `150` | Provider requests per minute, across all users |
+| `GRIDIRON_FETCH_BUDGET` | `150` | Provider requests per minute. Counted per process: one persistent server means one budget, and see the note below for what that means on a serverless host |
 | `GRIDIRON_POLL_*_S` | see below | Polling intervals, in seconds |
 | `GRIDIRON_MAX_STREAMS` | `500` | Concurrent browser streams |
 | `GRIDIRON_MAX_REPLAY_SESSIONS` | `25` | Concurrent replay lab sessions; `0` disables the lab |
@@ -252,6 +262,8 @@ Every setting is optional. [.env.example](.env.example) lists them all with comm
 | `GRIDIRON_FIXTURES_DIR` | `fixtures/espn` | Captured responses for the replay lab |
 | `GRIDIRON_TEAM_FIXTURES_DIR` | `fixtures/espn/team` | Saved team documents the replay lab reads before the network |
 | `SPORTRADAR_*` | none | Licensed provider keys and settings; see [docs/PROVIDERS.md](docs/PROVIDERS.md) |
+
+**The fetch budget is per process.** `GRIDIRON_FETCH_CONCURRENCY` and `GRIDIRON_FETCH_BUDGET` are enforced by a counter inside one running server, which is what the persistent deployment is: one process, one budget, one ceiling on how hard this asks the provider. On the Vercel deployment there is no single process. Each warm instance carries its own counter, so the real ceiling is 150 a minute multiplied by however many instances are warm, which nothing here knows or controls. The numbers above are honest for the persistent server and are an upper bound per instance, not a guarantee, on the serverless one. That is one of the reasons [docs/DEPLOYMENT_DECISION.md](docs/DEPLOYMENT_DECISION.md) recommends the persistent server; the provider is undocumented and has refused this deployment once already.
 
 For development and tests only: `GRIDIRON_API` tells the Vite dev server where to send `/api`, `GRIDIRON_PUSH_REPLAY=1` lets a replay-only server send push alerts (each titled "Replay"), and `GRIDIRON_PUSH_ALLOW_HOSTS` admits a local test push service outside production.
 
@@ -294,6 +306,8 @@ Running several instances works, but each one polls separately, and watch partie
 Deploy with the Vercel CLI or dashboard. Framework preset: Other. The build and output settings come from `vercel.json`, and no environment variables are needed.
 
 Vercel runs the function as Node ES modules, one transpiled file at a time, so every import in `api/`, `server/` and `shared/` names its `.js` file (TypeScript, Vite, Vitest and esbuild map it to the `.ts` source). `npm run check:serverless` loads the function that way and checks its routes, including requests in the form the rewrite delivers them, and `npm run check:serverless -- --live` also reads today's slate, a game's detail and the latest finished game's play-by-play. CI runs the offline check.
+
+Which of these should be the public link is worked through in [docs/DEPLOYMENT_DECISION.md](docs/DEPLOYMENT_DECISION.md), with what each option costs and why. The short answer is the persistent server, and the deciding argument is the fetch budget rather than the features.
 
 ### Continuous integration
 
@@ -620,8 +634,53 @@ tests/       Vitest unit and integration tests
 e2e/         Playwright journeys (replay mode), accessibility audit, screenshots, performance
 scripts/     dev runner, server bundler, asset compression, icon rendering, fixture capture and
              augmentation, Kalshi capture, smoke test, serverless check, e2e server
-docs/        providers, verification report, completion checklist, screenshots
+docs/        case study, deployment decision, proposals, tape persistence, providers,
+             verification report, completion checklist, screenshots
 ```
+
+## The shared boundary
+
+`shared/` is the code both the browser and the server run. It is the most
+structural decision in this repository and the least obvious from the file tree,
+so it is worth saying plainly.
+
+Three kinds of thing live there:
+
+- **The normalized model.** `shared/model.ts` is what a game *is* here. A provider
+  adapter's only job is to produce it; nothing above the adapter knows what ESPN's
+  payload looks like.
+- **Arithmetic about the model.** Where a drive started and how far it has come
+  (`driveTrack`), the game as it stood at a given play (`replayFrames`), what a
+  lane on the tape looks like, how a price moved, what counts as a moment worth
+  announcing.
+- **Facts about football.** Field geometry, the rulebook markings, how a play type
+  should move.
+
+**Why not put it in the server.** The browser needs the same answers. The field
+and the drive chart both draw a drive; if the server sent a drawing and the client
+drew another, the two would disagree about the same drive and no test would catch
+which was right. The client rewinds to an earlier play, and the score, the clock,
+the scorebug and the odds all have to agree about that moment; they agree because
+one function derives it.
+
+**Why not put it in the client.** The server needs the same answers too, before
+any browser is involved: to decide what changed since the last poll, to build a
+delta small enough to stream, to decide that a play is a touchdown worth an alert,
+and to record a lane on the tape for a game nobody has open.
+
+So the rule is: **if the browser and the server could ever disagree about it, it
+goes in `shared/`.** Rendering lives in `src/`. Talking to a provider lives in
+`server/`. The answer they both need lives between them, computed once.
+
+Two consequences worth knowing before editing it:
+
+- `shared/` may not use Node or browser APIs. It is imported by both, and by the
+  tests, which run in a node environment with no DOM.
+- Every relative import in `api/`, `server/` and `shared/` names its `.js` file,
+  because Vercel loads the function as plain Node ES modules one file at a time.
+  TypeScript, Vite, Vitest and esbuild all map that name back to the `.ts` source.
+  `tests/serverlessImports.test.ts` holds the rule, and `npm run check:serverless`
+  loads the function the way Vercel does to prove it.
 
 ## Testing
 
@@ -635,8 +694,22 @@ npm run check:serverless   # loads the Vercel function as plain Node ES modules,
 - The end-to-end suite runs every journey in Chrome, and the journeys tagged `@cross` in Firefox and WebKit. Install those two browsers once with `npx playwright install firefox webkit`.
 - It uses the installed Chrome by default. `PLAYWRIGHT_CHANNEL=bundled` uses Playwright's own Chromium, as CI does.
 - Choose browsers with `--project`, for example `npx playwright test --project=desktop-chrome --project=webkit`.
-- `GRIDIRON_CAPTURE=1` writes the design screenshots in `docs/screenshots`, and `GRIDIRON_PERF=1` records `docs/perf.json` and `docs/perf-game.json`.
+- `GRIDIRON_CAPTURE=1` writes the design screenshots in `docs/screenshots`, and `GRIDIRON_PERF=1` records the `docs/perf*.json` measurements.
+- **The screenshots are checked in deliberately**, as the visual record each cycle was judged against, and they are the largest thing in the repository: about 37 MB across 40 files, against 425 files in total. They are full-resolution captures at twice device scale, which is what makes them worth keeping and also what makes them large. CI regenerates the measurements as artifacts rather than committing them, for the opposite reason: a number goes stale silently, a picture does not.
 - Kalshi is never called in tests. Its unit tests use a stand-in with Kalshi's field names and made-up prices, and the replay tests read the prices captured in `fixtures/kalshi`.
+
+## License
+
+The code is [Apache 2.0](LICENSE). Apache rather than MIT for two reasons that are specific to this project: it grants patent rights explicitly, and its section 6 says in so many words that it grants no trademark rights, which matters for something that draws other people's marks on a field.
+
+What that covers, and what it does not:
+
+- **Covered:** everything in this repository that was written here. The engine, the normalization, the field renderers, the shared arithmetic, the tests and the captured fixtures.
+- **Not covered, and not ours to license:** the data. Scores, play-by-play, win probability and venue records come from ESPN's public but undocumented endpoints, sportsbook lines through them, and prices from Kalshi's public market data. None of it is redistributed here beyond the captured fixtures kept for tests, and none of it comes with any grant from its owner. Reusing this code does not give you a right to their data, and their terms are between you and them.
+- **Not covered:** team names, logos and marks. They belong to their clubs and leagues, they are fetched from the provider at runtime rather than stored here, and no licence in this repository conveys any right to them.
+- **Not covered:** the wordmark and the visual identity of Gridiron itself.
+
+There is no warranty, and none is implied by the fact that this runs. The upstream is unofficial and has refused this deployment before; see [Data sources and coverage limits](#data-sources-and-coverage-limits).
 
 ---
 

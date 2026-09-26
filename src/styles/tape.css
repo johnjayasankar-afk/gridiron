@@ -21,6 +21,42 @@
   flex-wrap: wrap;
 }
 
+/* Whose recording is on screen, said in words rather than shown as a badge. */
+.tape__imported {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tape__imported--bad {
+  border-color: color-mix(in srgb, var(--attention, #e0a33e) 55%, var(--border));
+}
+
+.tape__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* Saving the day sits with the day's own heading, not in a toolbar away from it. */
+.tape__save {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: center;
+  flex: none;
+}
+
 .tape__head h2 {
   margin: 0;
   font-size: 22px;

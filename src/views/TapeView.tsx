@@ -13,8 +13,9 @@
  * excitement: "movement" is the sum of the changes the provider's own win
  * probability made, and the page says so.
  */
-import { Radio } from 'lucide-react';
+import { Download, Radio, Upload } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { exportTape, importTape } from '../lib/tapeFile';
 import { scoreText, statusShort } from '../../shared/format';
 import { periodShort } from '../../shared/util';
 import type { GameSummary } from '../../shared/model';
@@ -90,12 +91,24 @@ function useBand(): { ref: (el: HTMLDivElement | null) => void; node: HTMLDivEle
 export function TapeView() {
   const dark = useIsDark();
   const model = useSlateModel();
-  const order = useTape((s) => s.order);
-  const tracks = useTape((s) => s.tracks);
+  const liveOrder = useTape((s) => s.order);
+  const liveTracks = useTape((s) => s.tracks);
+  const imported = useTape((s) => s.imported);
+  // An imported day is shown as itself. It is never merged with what this device recorded.
+  const order = imported ? imported.order : liveOrder;
+  const tracks = imported ? imported.tracks : liveTracks;
   const replayClock = useLive((s) => s.replayClock);
   const wall = useNow(1000);
   const { ref: axisRef, node: axisNode, width, left } = useBand();
   const [scrubAt, setScrubAt] = useState<number | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const openTape = useCallback(async (file: File) => {
+    const read = await importTape(file);
+    // A refusal is said out loud rather than leaving an empty tape to be puzzled over.
+    if (!read.ok) return setImportError(read.error);
+    setImportError(null);
+    useTape.getState().openImported(read.tape);
+  }, []);
 
   // The one view that never named itself, so opening it from a game left the tab reading that game's score.
   useEffect(() => {
@@ -166,21 +179,69 @@ export function TapeView() {
   if (!ranked.length) {
     return (
       <section className="tape" aria-labelledby="tape-title">
-        <TapeHead id="tape-title" from={null} to={null} live={0} />
+        {/* A saved day can be opened here too. An empty tape is exactly when somebody wants one. */}
+        <TapeHead id="tape-title" from={null} to={null} live={0} onImport={openTape} />
+        {importError && (
+          <p className="tape__imported tape__imported--bad" role="alert">
+            <span>{importError}</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setImportError(null)}>
+              Dismiss
+            </button>
+          </p>
+        )}
         <p className="tape__empty">
           Nothing has been recorded yet. The tape is written while Gridiron is open: once a game is under way its reported score and win probability are kept here, on this device, with the
-          moment each was true. It is not fetched, so it begins when you arrive.
+          moment each was true. It is not fetched, so it begins when you arrive. A day saved earlier can be opened above.
         </p>
       </section>
     );
   }
 
-  const liveCount = ranked.filter((r) => r.stats.live).length;
+  const liveCount = imported ? 0 : ranked.filter((r) => r.stats.live).length;
+  const saveDay = useCallback(() => {
+    const state = useTape.getState();
+    exportTape(
+      {
+        sourceKey: state.sourceKey,
+        origin: 'device',
+        day: model.world.date,
+        label: model.world.replayLabel ?? (model.world.date ? `Gridiron, ${model.world.date}` : 'A day on Gridiron'),
+      },
+      state.order,
+      state.tracks,
+    );
+  }, [model.world.date, model.world.replayLabel]);
   const scrubX = scrubAt === null || width <= 0 ? null : ((scrubAt - from) / Math.max(1, to - from)) * width;
 
   return (
     <section className="tape" aria-labelledby="tape-title">
-      <TapeHead id="tape-title" from={from} to={to} live={liveCount} />
+      <TapeHead id="tape-title" from={from} to={to} live={liveCount} onExport={imported ? undefined : saveDay} onImport={openTape} />
+
+      {/*
+        Whose recording this is, in words. An imported day was made somewhere
+        else and is not this device's; saying so is the whole reason the file
+        carries its provenance.
+      */}
+      {importError && (
+        <p className="tape__imported tape__imported--bad" role="alert">
+          <span>{importError}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setImportError(null)}>
+            Dismiss
+          </button>
+        </p>
+      )}
+
+      {imported && (
+        <p className="tape__imported" role="status">
+          <span>
+            <strong>{imported.file.label}</strong>, an imported tape. Recorded by {imported.file.origin === 'server' ? 'Gridiron' : 'another device'}
+            {imported.file.writtenAt ? ` and saved ${new Date(imported.file.writtenAt).toLocaleString()}` : ''}. This device's own recording is still running underneath it.
+          </span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => useTape.getState().closeImported()}>
+            Back to this device
+          </button>
+        </p>
+      )}
 
       {together && (
         <p className="tape__together">
@@ -322,7 +383,7 @@ function TapeSummary({ highlights, byId }: { highlights: ReturnType<typeof dayHi
   );
 }
 
-function TapeHead({ id, from, to, live }: { id: string; from: number | null; to: number | null; live: number }) {
+function TapeHead({ id, from, to, live, onExport, onImport }: { id: string; from: number | null; to: number | null; live: number; onExport?: () => void; onImport?: (file: File) => void }) {
   return (
     <header className="tape__head">
       <div>
@@ -337,6 +398,35 @@ function TapeHead({ id, from, to, live }: { id: string; from: number | null; to:
             'The day, on one clock'
           )}
         </p>
+      </div>
+      {/*
+        The recording is kept on this device and dies with the tab. Saving it is
+        the only way this day survives, and the only way it reaches anyone else.
+      */}
+      <div className="tape__tools">
+        {onExport && (
+          <button type="button" className="btn btn-ghost btn-sm tape__save" onClick={onExport} title="Save this day's recording as a file">
+            <Download size={14} aria-hidden="true" />
+            <span>Save this day</span>
+          </button>
+        )}
+        {onImport && (
+          <label className="btn btn-ghost btn-sm tape__save" title="Open a tape saved earlier, or sent by someone else">
+            <Upload size={14} aria-hidden="true" />
+            <span>Open a tape</span>
+            <input
+              type="file"
+              accept="application/json,.json"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                // Cleared so choosing the same file twice still counts as a change.
+                e.target.value = '';
+                if (file) onImport(file);
+              }}
+            />
+          </label>
+        )}
       </div>
     </header>
   );

@@ -1,0 +1,138 @@
+# The checks the README promises, in the order it promises them.
+#
+# Generated things are artifacts here, never commits: playwright-report and
+# docs/perf*.json are uploaded from the run that produced them, so the numbers
+# can never be stale relative to the code that produced them.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20.19'
+
+jobs:
+  check:
+    name: Typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      # Vercel loads the function as plain Node ES modules, one file at a time.
+      # This loads it the same way and checks its routes, without the network.
+      - name: Serverless check (offline)
+        run: npm run check:serverless
+      # A build must not write anything the index is tracking. This is what
+      # catches dist/ or node_modules/ creeping back in.
+      - name: The build left the tree clean
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "The working tree is dirty after a build. Generated files are being tracked:"
+            git status --porcelain
+            exit 1
+          fi
+      - name: Keep the build for the e2e jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: |
+            dist
+            dist-server
+          retention-days: 3
+
+  e2e:
+    name: e2e ${{ matrix.project }} ${{ matrix.shard }}/2
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop-chrome, firefox, webkit]
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+      # Keyed on the Playwright version: a browser build belongs to the version
+      # that installed it, and a stale cache is worse than no cache.
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache browsers
+        id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.project }}
+      - name: Install the browser
+        run: npx playwright install --with-deps ${{ matrix.project == 'desktop-chrome' && 'chromium' || matrix.project }}
+      - name: Run the suite
+        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/2
+      - name: Keep the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
+  measurements:
+    name: Graphics measurements
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+      - run: npx playwright install --with-deps chromium
+      # These write docs/perf*.json. They are uploaded, not committed: a number
+      # in the repository is a number that can go stale without anyone noticing.
+      - name: Measure
+        run: npx playwright test --project=desktop-chrome e2e/perf.spec.ts --workers=1
+        env:
+          GRIDIRON_PERF: '1'
+      - name: Keep the measurements
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: measurements
+          path: docs/perf*.json
+          retention-days: 30

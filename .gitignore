@@ -6,4 +6,5 @@ dist-server/
 .env.local
 .env*.local
 test-results/
+.vitest/
 playwright-report/

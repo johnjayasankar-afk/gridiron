@@ -20,7 +20,17 @@ const read = (rel: string) => readFileSync(new URL(rel, new URL(`file://${root}`
 function nodePolicy(): string[] {
   const body = /const CSP = \[([\s\S]*?)\]\.join/.exec(read('server/http.ts'));
   if (!body) throw new Error('server/http.ts no longer declares CSP as an array this test can read');
-  return [...body[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+  return [...body[1].matchAll(/["`]([^"`]+)["`]/g)]
+    .map((m) => m[1].replace('${FRAME_ANCESTORS}', frameAncestors()))
+    .sort();
+}
+
+/** The allowlist shared/embed.ts defines, which the CSP interpolates. */
+function frameAncestors(): string {
+  const src = read('shared/embed.ts');
+  const parents = [...src.matchAll(/^\s+'(https:\/\/[^']+)',$/gm)].map((m) => m[1]);
+  if (!parents.length) throw new Error('shared/embed.ts no longer lists EMBED_PARENTS');
+  return ["'self'", ...parents].join(' ');
 }
 
 /** The policy Vercel puts on every response. */
@@ -48,7 +58,10 @@ describe('the content security policy', () => {
       expect(by('default-src')).toBe("default-src 'self'");
       expect(by('object-src')).toBe("object-src 'none'");
       expect(by('base-uri')).toBe("base-uri 'none'");
-      expect(by('frame-ancestors')).toBe("frame-ancestors 'none'");
+      // Not 'none': the portfolio frames this product in its case study, and a
+      // blocked frame renders as a black box under a caption promising a live
+      // app. See tests/csp.test.ts and shared/embed.ts.
+      expect(by('frame-ancestors')).toContain('https://johnjayasankar.com');
       // Every network call the client makes is same-origin; only team images come from the provider.
       expect(by('connect-src')).toBe("connect-src 'self'");
       expect(by('img-src')).toContain('https://a.espncdn.com');

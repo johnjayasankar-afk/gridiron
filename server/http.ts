@@ -3,17 +3,19 @@
  * server-sent event stream, optional routes (watch parties, push alerts), and
  * (in production) the built client.
  */
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { anyFeedUnknown, feedUnknown } from '../shared/availability.js';
-import type { Division, LeagueId } from '../shared/model.js';
+import { FRAME_ANCESTORS } from '../shared/embed.js';
+import type { Division, GameId, LeagueId } from '../shared/model.js';
 import { parseGameId } from '../shared/model.js';
 import { teamPageAtReplay } from '../shared/team.js';
 import { isDateKey } from '../shared/util.js';
 import type { ClientInterest, EngineMessage, GridironEngine } from './engine.js';
 import { noteAcceptEncoding, readBody, SECURITY_HEADERS, send, type ApiRoute } from './respond.js';
+import { gameMeta, injectShellMeta, shellRoute, teamMeta } from './shellMeta.js';
 import type { TeamService } from './teams.js';
 
 export { COMPRESS_MIN_BYTES } from './respond.js';
@@ -59,6 +61,13 @@ export interface AppOptions {
   health?: () => Record<string, unknown>;
 }
 
+/*
+ * Where this deployment is reachable, for the `og:url` of a shared page. A
+ * crawler cannot resolve a relative one, and this server does not otherwise
+ * know its own public address.
+ */
+const SITE_ORIGIN = (process.env.GRIDIRON_ORIGIN ?? '').replace(/\/+$/, '');
+
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
@@ -69,7 +78,7 @@ const CSP = [
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'none'",
-  "frame-ancestors 'none'",
+  `frame-ancestors ${FRAME_ANCESTORS}`,
   "form-action 'self'",
 ].join('; ');
 
@@ -246,7 +255,45 @@ export function createApp(options: AppOptions) {
     return send(res, 404, { error: 'Not found' });
   }
 
-  function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
+  /**
+   * The shell, with this page's own title and description in it.
+   *
+   * A crawler never runs the client, so `document.title` cannot reach it: what a
+   * shared link says has to be in the HTML before it is sent. Only the two
+   * addresses worth describing are looked up, and only from what the engine
+   * already knows, so an HTML request never becomes a provider request. A game
+   * it has not polled keeps the shell's own words rather than waiting on a fetch
+   * or inventing an answer.
+   */
+  async function shellFor(url: URL, _unused: null): Promise<string | null> {
+    const route = shellRoute(url.pathname);
+    if (!route || !options.staticDir) return null;
+    const shell = join(resolve(options.staticDir), 'index.html');
+    if (!existsSync(shell)) return null;
+    const absolute = SITE_ORIGIN ? `${SITE_ORIGIN}${url.pathname}` : undefined;
+    try {
+      let meta = null;
+      if (route.kind === 'game') {
+        const game = options.engine.knownSummary(route.id as GameId);
+        if (game) meta = gameMeta(game);
+      } else if (options.teams) {
+        const dash = route.id.indexOf('-');
+        const league = dash > 0 ? route.id.slice(0, dash) : '';
+        const id = dash > 0 ? route.id.slice(dash + 1) : '';
+        if (league && id) {
+          const lookup = await options.teams.get(league as LeagueId, id, {});
+          if (lookup.ok) meta = teamMeta({ displayName: lookup.page.team.displayName, abbreviation: lookup.page.team.abbreviation, record: lookup.page.team.record.total });
+        }
+      }
+      if (!meta) return null;
+      return injectShellMeta(readFileSync(shell, 'utf8'), { ...meta, ...(absolute ? { url: absolute } : {}) });
+    } catch {
+      // A page that cannot describe itself is served exactly as it always was.
+      return null;
+    }
+  }
+
+  async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
     const dir = options.staticDir;
     if (!dir) {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS });
@@ -267,6 +314,26 @@ export function createApp(options: AppOptions) {
       return;
     }
     if (!exists) file = join(root, 'index.html'); // client-side routes
+
+    /*
+     * A game or a team page describes itself, which means building the shell
+     * rather than streaming it: the injected copy is a different length and a
+     * different document from the compressed twins on disk, so it is sent
+     * uncompressed and uncached, exactly as the shell already was.
+     */
+    const described = !exists ? await shellFor(url, null) : null;
+    if (described !== null) {
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-length': String(Buffer.byteLength(described)),
+        'cache-control': 'no-cache',
+        'content-security-policy': CSP,
+        ...SECURITY_HEADERS,
+      });
+      res.end(req.method === 'HEAD' ? undefined : described);
+      return;
+    }
+
     const ext = extname(file);
     const immutable = url.pathname.startsWith('/assets/');
     const longLived = LONG_CACHE.some((prefix) => url.pathname.startsWith(prefix)) || LONG_CACHE_FILES.has(url.pathname);
@@ -364,7 +431,7 @@ export function createApp(options: AppOptions) {
       }
 
       if (url.pathname.startsWith('/api/')) return await api(req, res, url, options.engine, '/api', null);
-      if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res, url);
+      if (req.method === 'GET' || req.method === 'HEAD') return await serveStatic(req, res, url);
       return send(res, 405, { error: 'Method not allowed' });
     } catch (e) {
       if (!res.headersSent) send(res, 500, { error: 'Server error', detail: (e as Error).message });

@@ -14,7 +14,10 @@
  */
 import { create } from 'zustand';
 import type { GameId } from '../../shared/model';
-import { MAX_SAMPLES, record, type TapeSample, type TapeTrack } from '../../shared/tape';
+import { MAX_SAMPLES, pack, record, unpack, type Packed, type TapeSample, type TapeTrack } from '../../shared/tape';
+import type { TapeFile } from '../../shared/tapeFile';
+
+export { pack, unpack, type Packed };
 
 /* v2 carries the play each reading followed. An older tape is simply not read:
    the key changes, so a v1 payload is ignored rather than half understood. */
@@ -30,50 +33,27 @@ export interface TapeState {
   order: GameId[];
   write: (gameId: GameId, sample: TapeSample) => void;
   restart: (sourceKey: string) => void;
+  /**
+   * A tape read from a file, shown instead of this device's own.
+   *
+   * Kept apart from `tracks` deliberately, and never merged into it. An imported
+   * day was recorded by another device, on another clock, possibly behind a
+   * different spoiler delay: it is a different object, and a blend of the two
+   * would be a drawing of something nobody recorded. The recording carries on in
+   * the background while one is open.
+   */
+  imported: ImportedTape | null;
+  openImported: (tape: ImportedTape) => void;
+  closeImported: () => void;
 }
 
-export type Packed = [
-  at: number,
-  home: number | null,
-  away: number | null,
-  wp: number | null,
-  period: number | null,
-  clock: string | null,
-  clockSeconds: number | null,
-  kind: string,
-  possession: string | null,
-  redZone: 0 | 1,
-  play: string | null,
-];
+export interface ImportedTape {
+  file: TapeFile;
+  tracks: Record<GameId, TapeTrack>;
+  order: GameId[];
+}
 
-/** Exported for the round trip test: an encoding that loses a field loses a day. */
-export const pack = (s: TapeSample): Packed => [
-  s.at,
-  s.home,
-  s.away,
-  s.wp === null ? null : Math.round(s.wp * 1e4) / 1e4,
-  s.period,
-  s.clock,
-  s.clockSeconds,
-  s.kind,
-  s.possession,
-  s.redZone ? 1 : 0,
-  s.play,
-];
 
-export const unpack = (p: Packed): TapeSample => ({
-  at: p[0],
-  home: p[1],
-  away: p[2],
-  wp: p[3],
-  period: p[4],
-  clock: p[5],
-  clockSeconds: p[6],
-  kind: p[7] as TapeSample['kind'],
-  possession: p[8] as TapeSample['possession'],
-  redZone: p[9] === 1,
-  play: p[10] ?? null,
-});
 
 interface Saved {
   sourceKey: string;
@@ -170,6 +150,10 @@ export const useTape = create<TapeState>()((set, get) => ({
     set({ sourceKey, tracks: {}, order: [] });
     save();
   },
+
+  imported: null,
+  openImported: (tape) => set({ imported: tape }),
+  closeImported: () => set({ imported: null }),
 }));
 
 /** Every track in the order it was first seen. A stable array so selectors can memoise on it. */

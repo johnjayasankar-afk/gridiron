@@ -325,3 +325,54 @@ export function convergence(games: GameSummary[], lateSeconds = 300, closeMargin
   hits.sort((a, b) => a.left - b.left || a.id.localeCompare(b.id));
   return { games: hits.map((h) => h.id), soonest: hits[0].left };
 }
+
+/**
+ * A sample, packed as an array.
+ *
+ * Both the browser's own session record and a tape written to a file are this
+ * shape, because a file written by one build and read by another has to agree
+ * about it, and that agreement is what `shared/` is for. Keys would be most of
+ * the bytes: a day of thirteen games is tens of thousands of samples.
+ */
+export type Packed = [
+  at: number,
+  home: number | null,
+  away: number | null,
+  wp: number | null,
+  period: number | null,
+  clock: string | null,
+  clockSeconds: number | null,
+  kind: string,
+  possession: string | null,
+  redZone: 0 | 1,
+  play: string | null,
+];
+
+/** Exported for the round trip test: an encoding that loses a field loses a day. */
+export const pack = (s: TapeSample): Packed => [
+  s.at,
+  s.home,
+  s.away,
+  s.wp === null ? null : Math.round(s.wp * 1e4) / 1e4,
+  s.period,
+  s.clock,
+  s.clockSeconds,
+  s.kind,
+  s.possession,
+  s.redZone ? 1 : 0,
+  s.play,
+];
+
+export const unpack = (p: Packed): TapeSample => ({
+  at: p[0],
+  home: p[1],
+  away: p[2],
+  wp: p[3],
+  period: p[4],
+  clock: p[5],
+  clockSeconds: p[6],
+  kind: p[7] as TapeSample['kind'],
+  possession: p[8] as TapeSample['possession'],
+  redZone: p[9] === 1,
+  play: p[10] ?? null,
+});

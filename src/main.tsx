@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { announceEmbed } from '../shared/embed.js';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/hud.css';
@@ -24,3 +25,11 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => undefined);
   });
 }
+
+// A page that framed this one cannot tell a blocked frame from a loaded one, so
+// it shows a still until this arrives. Sent as soon as the root has rendered,
+// not from a requestAnimationFrame: a cross-origin frame the embedding page has
+// not revealed yet is occluded, and Chrome defers its animation frames until it
+// is, which is a deadlock. Running at all is the signal, because a frame the
+// browser refused runs nothing.
+announceEmbed();

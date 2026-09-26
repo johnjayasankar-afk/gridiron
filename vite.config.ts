@@ -1,10 +1,18 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { absoluteMetaPlugin } from './scripts/html-meta.js';
 
 const API = process.env.GRIDIRON_API ?? 'http://127.0.0.1:8787';
+/*
+ * Where this build will be served from, for the social metadata only. Open
+ * Graph requires an absolute URL and no major unfurler resolves a relative one,
+ * so a build for another host sets this rather than editing the shell. Empty
+ * during development, where the shell's own relative paths are right.
+ */
+const ORIGIN = process.env.GRIDIRON_ORIGIN ?? (process.env.NODE_ENV === 'test' ? '' : 'https://gridiron-pink-chi.vercel.app');
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), absoluteMetaPlugin(ORIGIN)],
   server: {
     port: 5178,
     proxy: {
