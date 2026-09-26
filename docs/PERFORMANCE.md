@@ -52,6 +52,46 @@ obvious candidate: its momentum scrolling runs on the compositor while the main
 thread is starved, and a fixed, demand-rendered canvas is the pattern that comes
 apart there. Reproducing it needs the browser it happens in.
 
+## Measuring it where it happens
+
+Since it will not reproduce here, the app can measure itself in the browser it
+is happening in.
+
+```
+open the site with ?probe=tracking
+scroll the way that looks wrong
+read the line in the console, or copy window.__gridironTracking
+```
+
+It prints one line:
+
+```
+Gridiron tracking: worst gap 0px, typical 0px, 52 frames per 1000px,
+display 60Hz, canvas top 0px, dpr 2, 6 fields. The fields are tracking.
+```
+
+**worst gap** and **typical gap** are the distance between where a field was
+drawn and where its card had got to, in CSS pixels. That is the defect, measured
+directly. Under 20px is a frame of lag and invisible. Over 40px is what the
+report describes.
+
+**canvas top** should always be 0. If it is not, the canvas is scrolling with
+the page instead of staying fixed to the viewport, which happens when an
+ancestor gains a `transform`, `filter`, `backdrop-filter`, `will-change`,
+`contain` or `perspective` and takes over as the containing block. That was
+checked here and the ancestors are clean, but it is state-dependent and worth
+having in the readout.
+
+**display Hz** matters because the page scrolls at the display rate while the
+fields arrive at whatever this can draw. At 60Hz drawing 55 frames a second is
+invisible. At 120Hz it is every other frame, and a fast scroll puts real
+distance between a field and its card.
+
+The probe installs nothing without the flag, so it costs a normal visit nothing.
+It is validated by breaking it: freeze the frame counter so the canvas looks
+stopped and it reports a 1221px worst gap and zero frames per 1000px, which is
+the fault it exists to catch. `src/field/trackingProbe.ts`.
+
 ## Six things measured and not kept
 
 Every one of these was built, measured against the unchanged build with the
@@ -61,6 +101,8 @@ again.
 | Change | Result |
 |---|---|
 | Hold the atmosphere shader still during a scroll | 24px against 25px per redraw over eleven rounds. Nothing. |
+| Run the loop continuously while the page moves, instead of asking for one frame per scroll event | 51 frames per 1000px against 50, and it left the loop running for twenty frames after every scroll. |
+| Drop the field resolution while the page moves | 51 frames per 1000px against 55. Both were already at 57fps, so there was nothing for cheaper frames to buy. |
 | Replace the 250ms layout poller with a ResizeObserver and a MutationObserver | Nothing on a live page; the quiet-page run was bimodal and did not isolate the change. It also puts a MutationObserver over the whole body on a page that mutates constantly. |
 | Pre-compile the field shaders | There is nothing to fix: programs hold at 5 across four gestures. No compile happens mid-scroll. |
 | Chase a texture leak | There is none. Textures grow to 43 as views mount and then hold. |

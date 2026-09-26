@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { announceEmbed } from '../shared/embed.js';
+import { installTrackingProbe } from './field/trackingProbe';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/hud.css';
@@ -33,3 +34,8 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 // is, which is a deadlock. Running at all is the signal, because a frame the
 // browser refused runs nothing.
 announceEmbed();
+
+// Behind ?probe=tracking, and installs nothing without it: measures whether the
+// fields stay on their cards while the page scrolls, in the browser it is being
+// asked about. See src/field/trackingProbe.ts.
+installTrackingProbe();
