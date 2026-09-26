@@ -176,6 +176,92 @@ somewhere other than inside drei, which means not using drei's `View`.
 That is the honest end of this investigation: the next real win is in how the
 views are measured, and it is a change to the renderer, not a tweak around it.
 
+## The bug class: space reserved, pixels late
+
+Two separate complaints turned out to be the same mistake made twice. An element
+reserves its space in the layout, but the thing that fills it arrives from
+somewhere else and later. Between the two there is a hole, and the hole is
+exactly what "delayed and then snaps into place" describes. Nothing is slow;
+something is simply absent for a while and then present.
+
+It happens wherever the box and its contents are produced by different systems:
+
+| Where | The box | The pixels | The hole |
+|---|---|---|---|
+| Field | a `View` div in the card | a fixed WebGL canvas, scissored to that div | mount to first drawn frame |
+| Logo | a `.logo-frame` square | a lazily loaded provider image | mount to decode |
+
+Both are fixed the same way: draw something correct in the box immediately, and
+take it away when the real thing lands. The field gets the flat SVG of the same
+game at the same yard line; the logo gets the team's colour and abbreviation,
+which is the tile already written for a logo that fails.
+
+**Take it away, do not leave it behind.** This is the part that has to be got
+right, and getting it wrong was a visible regression in between: the 3D field is
+drawn in perspective and does not reach the corners of its box, so a flat field
+left underneath showed around the edges as a second, flatter field. Team marks
+are transparent and drawn to contain, so a tile left under one shows as a disc
+the design deliberately removed. The stand-in leaves.
+
+**Wait two drawn frames, not one.** The frame that mounts a view is often the
+frame that clears its rectangle. The next one is the first with a field in it.
+
+Measured on a 200kbps connection, worst moment of a forty-sample run:
+
+| | logo boxes | showing nothing | standing in |
+|---|---|---|---|
+| before | 26 | 26 | 0 |
+| after | 26 | 0 | 24 |
+
+And on a normal connection over a hundred samples: none ever empty, none left
+standing at the end, so the tile both arrives and leaves.
+
+## Asking for a frame when nothing moved
+
+A card can change places without the page scrolling: the slate is ordered by what
+is worth watching and that ranking follows the game. React moves the card's node
+and the browser paints it in its new place at once, but the field does not move
+until the canvas draws again. So a `MutationObserver` asks for a frame when the
+DOM changes.
+
+Watching every `childList` change under the body was far too broad. On a live
+slate left completely alone that is **681 batches in twenty seconds**, and nine
+in ten are a score or a clock changing inside a card that has not moved. Each one
+asked for a full redraw over all thirteen mounted views, about thirty-four times
+a second, for nothing.
+
+Unthrottled it hid, because there was headroom to absorb it. Under throttle it
+did not:
+
+| CPU | before | after |
+|---|---|---|
+| 4x | 70px per redraw, 10 long tasks, 1111ms blocked | 33px, 5 tasks, 438ms |
+| 1x | 25px, spread [13..37] | 22px, spread [18..25] |
+
+The tighter spread at 1x is the more useful half of that: the worst round now
+lands where the median used to be, and an uneven scroll is what reads as choppy.
+
+A card changing places arrives as that card's own node being taken out and put
+back, so the moved node is the card and the field is inside it. Filtering on that
+costs a `querySelector` over one card's subtree and reads no geometry, so it
+cannot force a layout mid-scroll. 681 batches become 72 requests.
+
+**Validate the filter by breaking it.** Forced to say no to everything it
+reported zero passing against fourteen reorders in the same window, which is what
+makes the 72 mean something. Without that check, a filter that passes nothing and
+a slate that never moves produce the same reassuring number.
+
+## When a redraw cannot keep up, move the frame instead
+
+Nothing makes a WebGL frame cheap enough to guarantee one per scrolled pixel. But
+a drawn frame that is late is still correct, just in the wrong place, and moving
+it is a transform: no layout, no paint, no redraw. The canvas is offset by how
+far the page has scrolled since the frame it is showing, and the offset returns
+to zero the moment a new frame lands.
+
+It reads 0px at rest and 0px once a scroll settles, so it is doing nothing in the
+normal case. At 20x throttle, one frame in eight carried an offset.
+
 ## Rules for using the harness
 
 **Nine rounds minimum.** At five rounds it reported one change as 94% worse and
