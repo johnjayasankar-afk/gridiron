@@ -40,6 +40,7 @@ Beside this file, in `docs/`:
 - [PROPOSALS.md](docs/PROPOSALS.md) argues whether there should ever be a second sport, counting what is actually football-shaped before arguing about it.
 - [TAPE_PERSISTENCE.md](docs/TAPE_PERSISTENCE.md) designs where the tape's recording should live, before any of it is built.
 - [PROVIDERS.md](docs/PROVIDERS.md), [VERIFICATION.md](docs/VERIFICATION.md) and [CHECKLIST.md](docs/CHECKLIST.md) are the provider interface, the verification report and the completion checklist.
+- [PERFORMANCE.md](docs/PERFORMANCE.md) is what scrolling costs, how to measure it with `scripts/scroll-perf.mjs`, and six changes that were measured and thrown away. Read it before optimising anything here.
 
 ## What is in it
 

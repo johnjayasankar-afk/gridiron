@@ -1313,6 +1313,13 @@ function anyFeedUnknown(freshness) {
   return Object.values(freshness ?? {}).some((f) => feedUnknown(f));
 }
 
+// shared/embed.ts
+var EMBED_PARENTS = [
+  "https://johnjayasankar.com",
+  "https://labs.johnjayasankar.com"
+];
+var FRAME_ANCESTORS = ["'self'", ...EMBED_PARENTS].join(" ");
+
 // shared/team.ts
 var MAX_WEEK = 53;
 function byeWeeksFrom(schedule) {
@@ -1587,7 +1594,7 @@ var CSP = [
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'none'",
-  "frame-ancestors 'none'",
+  `frame-ancestors ${FRAME_ANCESTORS}`,
   "form-action 'self'"
 ].join("; ");
 var TYPES = {
