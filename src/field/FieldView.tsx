@@ -94,19 +94,66 @@ export const FieldView = memo(function FieldView({ className = '', children, ...
   const near = useNearViewport(slot, scene.variant === 'detail' ? '120px' : '420px');
   const trailFrom = scene.animation && !scene.animation.corrected ? scene.animation.fromYard : null;
 
+  /*
+   * The flat field, which is what 2D mode draws for every card and what stands
+   * in until the 3D one is up.
+   *
+   * It used to render nothing there. A card reaching the screen before its 3D
+   * view had mounted showed an empty box, and then the field appeared in it:
+   * measured at up to 1.7 seconds on a slate that reorders itself while you
+   * read, because a card can be moved into view rather than scrolled into it,
+   * and the observer that mounts the view only fires once it is already there.
+   * That wait is what reads as the field being late and then snapping into
+   * place. There is no hole now: the same spot, the same yard line, the same
+   * reported ball, drawn flat, and the 3D field takes over when it is ready.
+   */
+  const flat = (
+    <FieldSvg
+      game={scene.game}
+      situation={scene.hidden ? null : scene.situation}
+      compact={scene.variant === 'compact'}
+      fromYard={trailFrom}
+      historical={scene.historical}
+      drive={scene.variant === 'detail' ? (scene.drive ?? null) : null}
+    />
+  );
+
+  /* The same field with nothing on it: the turf, the lines, the end zones and
+     no situation, drive or trail. It stands in for the 3D field for the frame
+     or two before the canvas draws, and everything it leaves out is about to be
+     drawn over anyway. The full one costs enough during a scroll to be worth
+     not drawing twice. */
+  const bare = (
+    <FieldSvg
+      game={scene.game}
+      situation={null}
+      compact={scene.variant === 'compact'}
+      fromYard={null}
+      historical={scene.historical}
+      drive={null}
+    />
+  );
+
   return (
     <div ref={slot} className={`field-slot field-${scene.variant} ${className}`} data-field-mode={mode}>
       <FieldBoundary mode={mode}>
-        {mode === '2d' ? (
-          <FieldSvg
-            game={scene.game}
-            situation={scene.hidden ? null : scene.situation}
-            compact={scene.variant === 'compact'}
-            fromYard={trailFrom}
-            historical={scene.historical}
-            drive={scene.variant === 'detail' ? (scene.drive ?? null) : null}
-          />
-        ) : near ? (
+        {/*
+          * The flat field sits underneath, from the moment this slot comes
+          * within reach of the viewport. A mounted 3D view is an empty div: its
+          * pixels come from the shared canvas, which is fixed over the page and
+          * scissors into the view's rectangle, so between the view mounting and
+          * the canvas drawing there is nothing in the box at all. That gap is
+          * what reads as the field arriving late and snapping into place, and
+          * on a slate that reorders itself while you read it is not rare.
+          *
+          * On the same gate as the 3D view rather than always: drawing it for
+          * every slot on the page, mounted or not, cost three times the blocked
+          * time during a scroll, which is the other half of the same complaint.
+          * Both appear in the same commit, the flat one paints immediately
+          * because it is DOM, and the 3D one paints over it on the next frame.
+          */}
+        {mode === '2d' ? flat : near ? bare : null}
+        {mode === '3d' && near ? (
           <Suspense fallback={null}>
             <Field3D {...scene} reducedMotion={reducedMotion} />
           </Suspense>

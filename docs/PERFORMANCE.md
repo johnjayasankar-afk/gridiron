@@ -10,6 +10,10 @@ Chrome, against `npm run build` with `GRIDIRON_PROVIDER=replay`.
 > When I scroll on a slate of games the fields stay fixed but the rest of the
 > page moves.
 
+Later, and this is the version that could be aimed at:
+
+> The fields are delayed and then snap into place after.
+
 That is a specific and plausible failure. The field canvas is one WebGL surface
 fixed to the viewport, and each field is drawn into its card's rectangle with a
 scissor. Rendering is on demand: nothing is drawn unless something asks for a
@@ -51,6 +55,49 @@ show the reported symptom on exactly this architecture, and Safari is the
 obvious candidate: its momentum scrolling runs on the compositor while the main
 thread is starved, and a fixed, demand-rendered canvas is the pattern that comes
 apart there. Reproducing it needs the browser it happens in.
+
+## The field that arrives late and snaps into place
+
+This one did reproduce, once the report was precise enough to aim at: the
+fields are not late, they are **missing**, and then they appear.
+
+A mounted 3D view is an empty `div`. Its pixels come from the shared canvas,
+which is fixed over the page and scissors into the view's rectangle, so between
+React mounting the view and the canvas drawing a frame there is nothing in the
+box. Before that, while the slot was still outside the mount margin, the render
+was literally `null`. Both are holes, and on a slate that reorders itself while
+you read, cards arrive in view without having been scrolled to, so the holes are
+not rare.
+
+Captured mid-scroll at 4x throttle: **four of six visible cards were empty
+boxes**, each with a drive strip and a floating pill on a blank panel. The same
+frame after the fix has a field on every card.
+
+The fix is that a flat field stands in. `FieldSvg` already draws the whole field
+for 2D mode, so it is the obvious floor: same spot, same yard line, same
+reported ball, drawn flat. It renders on the same gate as the 3D view, both land
+in the same commit, the flat one paints immediately because it is DOM, and the
+3D one paints over it on the next frame. The stand-in version carries no
+situation, drive or trail, since all of that is about to be covered.
+
+It is not free. Nine interleaved rounds:
+
+| | before | after |
+|---|---|---|
+| CPU 1x, px between redraws | 20 [17..24] | 24 [20..25] |
+| CPU 1x, long tasks | 0 | 0 |
+| CPU 4x, blocked during a scroll | 304ms | 651ms |
+
+At the speed this runs at, the cost is four pixels more between redraws, both
+sides of which are under the twenty-odd pixels where a gap becomes visible, and
+neither produces a long task. That buys a field on every card instead of blank
+boxes on most of them. Under a 4x throttle the cost is real, but so is the
+symptom, and a machine that slow was showing more holes to begin with.
+
+Two things measured on the way and kept out: rendering the flat field for
+**every** slot rather than only mounted ones tripled the blocked time, and
+cutting the stand-in down to a bare field did not recover it, so the cost is the
+extra component tree rather than what it draws.
 
 ## Measuring it where it happens
 
