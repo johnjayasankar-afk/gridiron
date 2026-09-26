@@ -1551,13 +1551,33 @@ input[type='range'] {
   flex: none;
 }
 
+/* The mark and the letters that stand in for it share one cell, not two rows. */
+.logo-frame > * {
+  grid-area: 1 / 1;
+}
+
 .logo-frame img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-.logo-fallback {
+/*
+ * The tile: a team's colour and its abbreviation, at the size the mark would
+ * have been. It is what a card shows when a logo will never arrive
+ * (.logo-fallback) and what it shows while one is still coming
+ * (.logo-waiting). The frame reserves the space either way, so the box used to
+ * sit empty until the image decoded: 26 of them blank at once on a slow
+ * connection, because the logos are loaded lazily and a whole slate reaches
+ * the screen at once.
+ *
+ * The waiting tile leaves when the image lands rather than staying behind it.
+ * Team marks are transparent and drawn to contain, so a disc left underneath
+ * shows around the edges, and the provider serves the same team with and
+ * without its dark variant from one report to the next.
+ */
+.logo-fallback,
+.logo-waiting {
   display: inline-grid;
   place-items: center;
   flex: none;
@@ -1567,6 +1587,11 @@ input[type='range'] {
   font-family: var(--mono);
   font-weight: 500;
   letter-spacing: 0.02em;
+}
+
+.logo-waiting {
+  width: 100%;
+  height: 100%;
 }
 
 .score {
