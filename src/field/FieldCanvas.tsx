@@ -114,18 +114,35 @@ function Invalidator() {
      * the same frame the move happened, and the timer stays as a backstop for
      * moves that never touch the DOM at all.
      *
-     * Coalesced to one request a frame: the slate mutates constantly with live
-     * data and most of those mutations are text inside a card, not a card
-     * changing places.
+     * Only mutations that carry a field count. The slate mutates constantly
+     * with live data, and nearly all of it is a score or a clock changing
+     * inside a card that has not moved: asking for a WebGL frame on each one
+     * costs a full redraw over every mounted view and buys nothing. A card
+     * changing places, on the other hand, arrives as that card's own node
+     * being taken out and put back, so the moved node is the card and the
+     * field is inside it. Checking for one is a query over a single card's
+     * subtree, and it reads no geometry, so it cannot force a layout in the
+     * middle of a scroll. Then coalesced to one request a frame.
      */
     let queued = false;
-    const moved = new MutationObserver(() => {
+    const carriesField = (list: NodeList) => {
+      for (const node of list) {
+        if (!(node instanceof Element)) continue;
+        if (node.classList.contains('field-view') || node.querySelector('.field-view')) return true;
+      }
+      return false;
+    };
+    const moved = new MutationObserver((records) => {
       if (queued) return;
-      queued = true;
-      requestAnimationFrame(() => {
-        queued = false;
-        request();
-      });
+      for (const record of records) {
+        if (!carriesField(record.addedNodes) && !carriesField(record.removedNodes)) continue;
+        queued = true;
+        requestAnimationFrame(() => {
+          queued = false;
+          request();
+        });
+        return;
+      }
     });
     moved.observe(document.body, { childList: true, subtree: true });
 
