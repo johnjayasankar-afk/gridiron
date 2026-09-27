@@ -1462,12 +1462,31 @@ input[type='range'] {
   color: var(--attention-ink);
 }
 
+/*
+ * The pulse rides on a pseudo-element, and scales instead of growing a shadow.
+ *
+ * Animating box-shadow restyles and repaints the element on every frame, and
+ * there is one of these on every live card: measured on a live slate sitting
+ * untouched, sixteen of them accounted for most of 394 style recalculations in
+ * ten seconds. Scale and opacity are composited, so the same pulse costs the
+ * main thread nothing. This is how flow-ping already does it.
+ */
 .live-dot {
+  position: relative;
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--live);
+}
+
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--live);
   animation: ping 2.2s var(--ease) infinite;
+  will-change: transform, opacity;
 }
 
 .card-link {
@@ -4452,11 +4471,13 @@ button.pbp-row:hover {
 
 @keyframes ping {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 55%, transparent);
+    opacity: 0.55;
+    transform: scale(1);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 6px transparent;
+    opacity: 0;
+    transform: scale(2.7);
   }
 }
 

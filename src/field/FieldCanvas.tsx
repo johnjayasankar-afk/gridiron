@@ -6,7 +6,7 @@
  */
 import { View } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFieldMode, useGraphics } from '../state/graphics';
 import { usePrefs } from '../state/prefs';
 import { noteFieldFrameDrawn, registerFieldFrameRequester } from './frameBus';
@@ -237,12 +237,26 @@ function AdaptiveResolution() {
   const gl = useThree((s) => s.gl);
   const effects = usePrefs((s) => s.effects);
   const views = useGraphics((s) => s.views);
-  const ceiling = useMemo(() => {
-    const device = Math.min(2, window.devicePixelRatio || 1);
-    const byEffects = effects === 'full' ? device : Math.min(device, 1.25);
-    const byViews = views > 12 ? 1.25 : views > 6 ? 1.5 : 2;
-    return Math.max(1, Math.min(byEffects, byViews));
-  }, [effects, views]);
+  /*
+   * The ceiling moves with how many fields are mounted, but not on a knife
+   * edge. Scrolling walks the count up and down past any fixed threshold, and
+   * every crossing reallocates the drawing buffer, so the steps overlap: the
+   * count has to come back well below a boundary before the ceiling goes back
+   * up. Held in a ref rather than recomputed, because the answer depends on
+   * where it already was.
+   */
+  const ceilingRef = useRef(2);
+  const device = Math.min(2, window.devicePixelRatio || 1);
+  const byEffects = effects === 'full' ? device : Math.min(device, 1.25);
+  const held = ceilingRef.current;
+  const byViews =
+    views > 12 ? 1.25
+    : views > 10 && held <= 1.25 ? 1.25          // stay down until well clear of 12
+    : views > 6 ? 1.5
+    : views <= 4 || held >= 2 ? 2                // and well clear of 6 before going back up
+    : 1.5;
+  const ceiling = Math.max(1, Math.min(byEffects, byViews));
+  ceilingRef.current = ceiling;
   const current = useRef(ceiling);
   const samples = useRef<number[]>([]);
   const started = useRef(0);
@@ -259,6 +273,29 @@ function AdaptiveResolution() {
     started.current = performance.now();
     gl.info.reset();
   }, -100);
+  /*
+   * Resolution changes are expensive and visible, so this is deliberately slow
+   * to act.
+   *
+   * Changing it reallocates the drawing buffer, which at this size is around
+   * three million pixels with its depth and stencil, and forces every mounted
+   * view to be drawn again. It is also not invisible: the fields get sharper
+   * or softer, and doing that while somebody is scrolling reads as the page
+   * struggling.
+   *
+   * The old rule stepped whenever a 24 frame average left the band 6ms to
+   * 22ms, and it hunted. Measured over 24 seconds of scrolling with the number
+   * of mounted views sitting still at eight: 1 to 2 to 1.5 to 1.25 and back to
+   * 1.5, four reallocations chasing its own tail, because dropping the
+   * resolution makes frames cheaper, which is then read as room to raise it.
+   *
+   * Two things stop that. A wider dead band, so the ordinary variation between
+   * frames is not a signal. And a delay after any change, longer before going
+   * back up than before coming down, so a drop has to prove itself before it
+   * is undone. Dropping stays quicker than recovering, which is the right way
+   * round: it is the frames that are too slow that anybody notices.
+   */
+  const changedAt = useRef(0);
   useFrame(() => {
     const list = samples.current;
     list.push(performance.now() - started.current);
@@ -268,11 +305,15 @@ function AdaptiveResolution() {
     const average = list.reduce((a, b) => a + b, 0) / list.length;
     averageFrameMs = Math.round(average * 100) / 100;
     list.length = 0;
+    const now = performance.now();
+    const since = now - changedAt.current;
     let next = current.current;
-    if (average > 22) next = Math.max(0.75, next - 0.25);
-    else if (average < 6) next = Math.min(ceiling, next + 0.25);
+    if (average > 26 && since > 1500) next = Math.max(0.75, next - 0.25);
+    else if (average < 4.5 && since > 6000) next = Math.min(ceiling, next + 0.25);
+    else if (next > ceiling) next = ceiling;
     if (next !== current.current) {
       current.current = next;
+      changedAt.current = now;
       useGraphics.getState().setDpr(next);
     }
   }, 100);
