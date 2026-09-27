@@ -54,7 +54,32 @@ browser that throttles the main thread harder during a momentum scroll would
 show the reported symptom on exactly this architecture, and Safari is the
 obvious candidate: its momentum scrolling runs on the compositor while the main
 thread is starved, and a fixed, demand-rendered canvas is the pattern that comes
-apart there. Reproducing it needs the browser it happens in.
+apart there.
+
+**Checked in WebKit, 26 September 2026, and it did not reproduce there either.**
+Playwright's WebKit, a forty step wheel scroll, and the canvas redrew on
+essentially every frame that carried a scroll event: 55 to 63 drawn frames
+against 40 scroll events. A screenshot taken immediately after twelve hard wheel
+steps, with nothing allowed to settle, shows every field inside its card.
+
+Two dead ends worth recording, because both looked like findings first.
+
+Measuring the gap from inside the page reported 3 to 7 samples over 25px per
+run. They are not real. They are animation frames sampled between a scroll event
+and the redraw it triggered, and the browser does not paint in that window, so
+nothing on screen ever showed them. The same mistake as measuring the counter
+instead of the result, in a new place.
+
+The canvas offset compensation never engages in WebKit, and that is correct
+rather than broken: it exists for the frames where a redraw does not arrive, and
+in WebKit one always did. Measured with and without it in a single pass, so the
+two numbers cannot drift apart: identical, three runs out of three. It took
+throttling to 20x to make it do anything at all, where one frame in eight
+carried an offset.
+
+So the lateness that could be found and fixed was the field being absent, not
+the field being in the wrong place. Reproducing the other thing still needs the
+browser it happens in, and it is now known not to be this one.
 
 ## The field that arrives late and snaps into place
 
