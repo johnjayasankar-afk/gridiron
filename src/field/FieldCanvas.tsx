@@ -9,7 +9,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { useFieldMode, useGraphics } from '../state/graphics';
 import { usePrefs } from '../state/prefs';
-import { noteFieldFrameDrawn, onFieldFrameDrawn, registerFieldFrameRequester } from './frameBus';
+import { noteFieldFrameDrawn, registerFieldFrameRequester } from './frameBus';
 import { onFieldTexturesChanged } from './textures';
 
 export interface GraphicsInfo {
@@ -45,44 +45,42 @@ function Invalidator() {
   const canvas = useThree((s) => s.gl.domElement);
 
   /*
-   * Hold the drawn fields on their cards between frames.
+   * Put the canvas in the page, so the page carries it.
    *
-   * The canvas is fixed to the viewport and each field is scissored to its
-   * card's rectangle, so a frame is only correct for the scroll position it was
-   * drawn at. The page keeps scrolling after that, on the compositor, whether
-   * or not this thread manages another frame, and every pixel the canvas is
-   * showing belongs further and further up the page. That is the field sitting
-   * still while the card slides away from under it.
+   * Each field is scissored to its card's rectangle as of the frame it was
+   * drawn in, so a drawn frame is only correct for one scroll position. While
+   * the canvas was fixed to the viewport, every pixel it was showing belonged
+   * further up the page the moment the page moved again, and it stayed wrong
+   * until another frame landed. That is the field sitting still while the card
+   * slides out from under it, and it cannot be fixed by drawing faster: this
+   * display asks for 120 frames a second, a full slate mounts a dozen views,
+   * and a WebGL frame per scrolled pixel is not on offer.
    *
-   * Nothing can make a WebGL frame cheap enough to guarantee one per scrolled
-   * pixel. But the drawn frame is still right, just in the wrong place, and
-   * moving it is a transform: no layout, no paint, no redraw, and cheap enough
-   * to keep up where a redraw cannot. So the canvas is offset by however far
-   * the page has scrolled since the frame it is showing, which puts every field
-   * back on its card, and the offset returns to zero the moment a new frame
-   * lands.
+   * Correcting it from a scroll listener does not work either, and that is
+   * worth saying plainly because it was the previous attempt. The page scrolls
+   * on the compositor; the scroll event arrives on this thread afterwards. A
+   * correction computed from it is applied a frame late, every frame, which is
+   * the lag it was meant to remove.
+   *
+   * So the canvas stops being fixed. Absolutely positioned with no positioned
+   * ancestor, it sits in the initial containing block: a viewport-sized box at
+   * the top of the document, which scrolls with the document like everything
+   * else, on the compositor, at whatever rate the display runs. A field then
+   * holds its card by construction, at any frame rate, including none.
+   *
+   * All a drawn frame has to do is put the box back over the viewport, which is
+   * this: translate it down by the scroll position it is about to draw for.
+   * Done before drei measures anything (priority below its own), so what it
+   * computes its scissor rectangles against is where the canvas actually is.
    */
-  useEffect(() => {
-    let drawnAt = window.scrollY || 0;
-    let offset = 0;
-    const put = (value: number) => {
-      if (value === offset) return;
-      offset = value;
-      canvas.style.transform = value ? `translate3d(0, ${value}px, 0)` : '';
-    };
-    const hold = () => put(drawnAt - (window.scrollY || 0));
-    const settled = () => {
-      drawnAt = window.scrollY || 0;
-      put(0);
-    };
-    const offDrawn = onFieldFrameDrawn(settled);
-    window.addEventListener('scroll', hold, { passive: true, capture: true });
-    return () => {
-      offDrawn();
-      window.removeEventListener('scroll', hold, { capture: true });
-      canvas.style.transform = '';
-    };
-  }, [canvas]);
+  const anchored = useRef<number | null>(null);
+  useFrame(() => {
+    const y = Math.round(window.scrollY || 0);
+    if (anchored.current === y) return;
+    anchored.current = y;
+    canvas.style.transform = y ? `translate3d(0, ${y}px, 0)` : '';
+  }, -200);
+  useEffect(() => () => { canvas.style.transform = ''; }, [canvas]);
 
   useEffect(() => {
     let trailing: ReturnType<typeof setTimeout>[] = [];
@@ -232,15 +230,15 @@ export function FieldCanvas() {
       className="field-canvas"
       frameloop="demand"
       /*
-       * This canvas is fixed to the viewport and never moves with the page, so
-       * it has no use for the scroll listeners react-three-fiber attaches by
-       * default, and nothing to debounce: its size changes when the window's
-       * does and at no other time.
+       * The canvas is sized by the initial containing block, which is the
+       * viewport, so its size changes when the window's does and at no other
+       * time. It does move with the page now, but its size does not, and
+       * re-measuring it on scroll would only cost a forced layout per event.
        */
       flat
       dpr={dpr}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance', stencil: false }}
-      style={{ position: 'fixed', inset: 0, width: 'auto', height: 'auto', pointerEvents: 'none', zIndex: 5 }}
+      style={{ position: 'absolute', inset: 0, width: 'auto', height: 'auto', pointerEvents: 'none', zIndex: 5 }}
       aria-hidden="true"
       onCreated={({ gl }) => {
         gl.setClearColor(0x000000, 0);
