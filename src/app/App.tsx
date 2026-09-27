@@ -21,6 +21,7 @@ import { FocusView } from '../views/FocusView';
 import { NotFoundView } from '../views/NotFoundView';
 import { SlateView } from '../views/SlateView';
 import { TeamPageLoading } from '../views/TeamLoading';
+import { GamePageLoading, TapePageLoading } from '../views/RouteLoading';
 import { WallView } from '../views/WallView';
 import { navigate, useLocation } from './router';
 import { useAlerts } from './useAlerts';
@@ -222,12 +223,12 @@ export function App() {
               {route.name === 'slate' && <SlateView />}
               {route.name === 'focus' && <FocusView />}
               {route.name === 'tape' && (
-                <Suspense fallback={null}>
+                <Suspense fallback={<TapePageLoading />}>
                   <TapeView />
                 </Suspense>
               )}
               {route.name === 'game' && (
-                <Suspense fallback={null}>
+                <Suspense fallback={<GamePageLoading />}>
                   <DetailView key={route.id} id={route.id} />
                 </Suspense>
               )}

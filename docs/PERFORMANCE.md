@@ -216,6 +216,29 @@ Measured on a 200kbps connection, worst moment of a forty-sample run:
 And on a normal connection over a hundred samples: none ever empty, none left
 standing at the end, so the tile both arrives and leaves.
 
+### The same hole at page scale
+
+A route is its own chunk, so between the click and the page there is a moment
+with nothing to render, and two routes spent it on `fallback={null}`: the header
+and the rail stayed, the middle of the window went blank. The team route already
+drew a frame there instead.
+
+Most of the time it never showed, because the app warms the game and tape chunks
+on idle, and by the time anybody clicks they have arrived. Clicking the instant a
+card appeared on a 45kbps connection still did not produce a blank, so the warm
+is doing its job.
+
+It shows on a link. Landing straight on a game URL runs no idle preload, so the
+shell paints and the route is still outstanding:
+
+| | blank samples after the shell was up | longest blank run |
+|---|---|---|
+| before | 3 | 300ms |
+| after | 0 | 0ms |
+
+Which is the case that matters most, because a game URL is the thing people send
+each other.
+
 ## Asking for a frame when nothing moved
 
 A card can change places without the page scrolling: the slate is ordered by what
