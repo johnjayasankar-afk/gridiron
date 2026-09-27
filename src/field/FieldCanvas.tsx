@@ -90,7 +90,30 @@ function Invalidator() {
       trailing = [setTimeout(() => invalidate(), 60), setTimeout(() => invalidate(), 220)];
     };
     registerFieldFrameRequester(request);
-    window.addEventListener('scroll', request, { passive: true, capture: true });
+    /*
+     * Scrolling no longer asks for a frame.
+     *
+     * It used to have to. The canvas was fixed and every field was scissored to
+     * a viewport rectangle, so a scrolled page made every drawn field wrong and
+     * only a redraw could put it right. That is what made a scroll expensive:
+     * a full redraw over every mounted view, per scroll event, on the one
+     * thread that also has to lay the page out.
+     *
+     * Now the canvas travels with the page, so a card's position relative to it
+     * does not change while scrolling, and the rectangles stay exactly as
+     * correct as they were. The pixels are already right and already in the
+     * right place. Redrawing them would produce the same image.
+     *
+     * A view that mounts mid-scroll still needs a frame, and asks for one
+     * itself when it goes live. The request below is a backstop for anything
+     * that does not, and it runs once the scroll stops rather than during it.
+     */
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const afterScroll = () => {
+      clearTimeout(settle);
+      settle = setTimeout(request, 120);
+    };
+    window.addEventListener('scroll', afterScroll, { passive: true, capture: true });
     window.addEventListener('resize', request);
     const offTextures = onFieldTexturesChanged(request);
     const offPrefs = usePrefs.subscribe((s, p) => {
@@ -144,14 +167,22 @@ function Invalidator() {
     });
     moved.observe(document.body, { childList: true, subtree: true });
 
-    // Layout can move a field without a scroll, a resize or a DOM change at all.
+    /*
+     * Layout can move a field without a scroll, a resize or a DOM change at
+     * all. Measured against the canvas rather than the viewport: what decides
+     * whether a drawn field is still right is where its card sits relative to
+     * the canvas, and scrolling no longer changes that. Comparing viewport
+     * rectangles instead would report a change on every scrolled pixel and ask
+     * for a redraw that draws the same image.
+     */
     let signature = '';
     const timer = setInterval(() => {
       if (document.hidden) return;
+      const base = canvas.getBoundingClientRect();
       let next = '';
       document.querySelectorAll('.field-view').forEach((el) => {
         const r = el.getBoundingClientRect();
-        next += `${r.left | 0},${r.top | 0},${r.width | 0},${r.height | 0};`;
+        next += `${(r.left - base.left) | 0},${(r.top - base.top) | 0},${r.width | 0},${r.height | 0};`;
       });
       if (next !== signature) {
         signature = next;
@@ -159,7 +190,8 @@ function Invalidator() {
       }
     }, 250);
     return () => {
-      window.removeEventListener('scroll', request, { capture: true });
+      clearTimeout(settle);
+      window.removeEventListener('scroll', afterScroll, { capture: true });
       window.removeEventListener('resize', request);
       offTextures();
       offPrefs();
@@ -168,7 +200,7 @@ function Invalidator() {
       trailing.forEach(clearTimeout);
       registerFieldFrameRequester(null);
     };
-  }, [invalidate]);
+  }, [invalidate, canvas]);
   return null;
 }
 
