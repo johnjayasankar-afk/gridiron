@@ -74,7 +74,7 @@ function Invalidator() {
    * computes its scissor rectangles against is where the canvas actually is.
    */
   const anchored = useRef<number | null>(null);
-  useFrame(() => {
+  useFrame((state) => {
     /*
      * The element that moves has to be the element react-three-fiber measures,
      * or the two disagree and every scissor rectangle is off by the difference.
@@ -85,9 +85,25 @@ function Invalidator() {
      */
     const host = (canvas.closest('.field-canvas') as HTMLElement | null) ?? canvas;
     const y = Math.round(window.scrollY || 0);
-    if (anchored.current === y) return;
-    anchored.current = y;
-    host.style.transform = y ? `translate3d(0, ${y}px, 0)` : '';
+    if (anchored.current !== y) {
+      anchored.current = y;
+      host.style.transform = y ? `translate3d(0, ${y}px, 0)` : '';
+    }
+    /*
+     * And state the invariant rather than trusting when it was last measured.
+     *
+     * The line above puts the container over the viewport for this frame, so
+     * its top is zero whenever a frame is drawn. But the size react-three-fiber
+     * hands to drei is whatever it last measured, and it measures on its own
+     * schedule. Catch it part way through travelling with the page and it
+     * caches a top of minus the scroll position, which every field is then
+     * scissored against: boxes empty, fields drawn a screenful below them.
+     * Turning off its scroll re-measure removes the common way in; this removes
+     * the rest, because the value is not something to observe. It is zero, by
+     * construction, every time this runs.
+     */
+    const size = state.size as { top: number };
+    if (size && size.top !== 0) size.top = 0;
   }, -200);
   useEffect(() => {
     const host = (canvas.closest('.field-canvas') as HTMLElement | null) ?? canvas;
