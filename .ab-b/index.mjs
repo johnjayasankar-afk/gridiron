@@ -572,6 +572,10 @@ var GridironEngine = class {
   get providerInfo() {
     return this.provider.info;
   }
+  /** What the provider's data got wrong so far. Empty when a provider does not count. */
+  dataQuality() {
+    return this.provider.dataQuality?.() ?? {};
+  }
   today() {
     return this.todayKey();
   }
@@ -1850,6 +1854,7 @@ data: ${JSON.stringify(data)}
           teamsAvailable: !!options.teams,
           fetcher: options.fetcherStats(),
           engine: options.engine.stats(),
+          dataQuality: options.engine.dataQuality?.() ?? {},
           ...options.health?.()
         });
       }
@@ -4757,6 +4762,9 @@ var EspnProvider = class {
     divisions: ["NFL", "FBS", "FCS", "D2", "D3"]
   };
   diagnostics = newDiagnostics();
+  dataQuality() {
+    return { ...this.diagnostics };
+  }
   coverage = /* @__PURE__ */ new Map();
   conferences = /* @__PURE__ */ new Map();
   seasons = /* @__PURE__ */ new Map();
@@ -5995,6 +6003,9 @@ var SportradarProvider = class {
   options;
   info;
   diagnostics = newSportradarDiagnostics();
+  dataQuality() {
+    return { ...this.diagnostics };
+  }
   subscribe;
   client;
   now;
