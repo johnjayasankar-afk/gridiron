@@ -15,6 +15,7 @@ const SORTS: Array<{ value: SortMode; label: string }> = [
   { value: 'kickoff', label: 'Kickoff time' },
   { value: 'favorites', label: 'Favorites first' },
   { value: 'closest', label: 'Closest score' },
+  { value: 'disagreement', label: 'Market disagrees' },
 ];
 
 const COLLEGE_DIVISIONS: Division[] = ['FBS', 'FCS', 'D2', 'D3'];

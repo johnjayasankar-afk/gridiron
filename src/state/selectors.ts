@@ -9,6 +9,7 @@ import { isLiveOrPaused } from '../../shared/model';
 import { mergeSummaries, situationFromPlays } from '../../shared/situation';
 import type { WatchItem } from '../../shared/watch';
 import type { World } from './live';
+import { byDisagreement } from '../../shared/consensus';
 import type { Filters, LeagueFilter, SortMode } from './prefs';
 
 const merged = new WeakMap<GameSummary, WeakMap<GameSummary, GameSummary>>();
@@ -157,6 +158,16 @@ export function sortGames(games: GameSummary[], ctx: SortContext): GameSummary[]
       }
       case 'favorites':
         return Number(isFavoriteGame(b, ctx.favorites)) - Number(isFavoriteGame(a, ctx.favorites)) || byKickoff(a, b);
+      case 'disagreement': {
+        /*
+         * Widest gap between the provider's model and the exchange first. Both
+         * numbers are reported and the order is the distance between them; a
+         * game missing either one keeps kickoff order behind the ones that
+         * have both, rather than being ranked on half a comparison.
+         */
+        const d = byDisagreement(a, b);
+        return d !== 0 ? d : byKickoff(a, b);
+      }
       case 'closest': {
         const ma = isLiveOrPaused(a.status.kind) ? margin(a) : null;
         const mb = isLiveOrPaused(b.status.kind) ? margin(b) : null;

@@ -187,6 +187,16 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #8abef0 38%, var(--border));
 }
 
+/*
+ * The split marker. Amber rather than the market's blue, because it is not
+ * another price: it is the two prices failing to agree, and it should read as
+ * something to look at rather than something to read off.
+ */
+.odds-chip.is-split {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--attention) 42%, var(--border));
+  color: color-mix(in srgb, var(--attention) 70%, var(--text));
+}
+
 .odds-chip.is-stale,
 .odds-block.is-stale .odds-now {
   color: var(--text-3);

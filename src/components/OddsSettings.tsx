@@ -33,7 +33,10 @@ export function OddsHelp() {
         <li>Win probability is ESPN's model, reported after each play. Before kickoff, Gridiron shows ESPN's matchup predictor instead. Both are shown as reported; Gridiron never calculates a chance of its own.</li>
         <li>Spread, moneyline and total come from the sportsbook ESPN names beside them. Before kickoff they are the current lines; during a game, the latest lines ESPN reported; after it, the closing lines.</li>
         <li>Kalshi prices come from Kalshi's public market data. The Gridiron server reads them about every 15 seconds while a game is live and shares them with every viewer. A price of 55% means the contract trades around 55 cents: the middle of the best bid and ask when they are close, otherwise the last trade.</li>
-        <li>Everything here follows the spoiler delay. Replays include the captured closing lines and win probability, but no Kalshi prices.</li>
+        <li>
+          A game is marked <strong>Split</strong> when ESPN&apos;s model and the exchange are at least eight points apart on the same question, and the slate can be sorted by it. Both numbers are shown as reported and neither is corrected; Gridiron does not decide which one is right, blend them, or read a recommendation into the gap. Eight points is where the top tenth of the measured gaps begins: across a captured Sunday the two sat a median of 0.9 points apart. A price the exchange has not refreshed is never counted, because a stale price and a real disagreement look the same. Watch next is unaffected and still uses no probabilities at all.
+        </li>
+        <li>Everything here follows the spoiler delay. Replays include the captured closing lines and win probability, and the exchange prices captured for that day where there are any.</li>
         <li>{GAMBLING_NOTE}</li>
       </ul>
     </section>

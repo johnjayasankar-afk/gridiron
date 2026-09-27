@@ -83,6 +83,47 @@ test.describe('Odds and win probability', () => {
     await expect(market).not.toContainText('As traded at this play');
   });
 
+  /**
+   * The provider's model and the exchange are two independent readings of the
+   * same question and they part company sometimes. Found by creating a session
+   * at each position rather than seeking one, because seeking leaves the two
+   * momentarily out of step and invents the gap: Buffalo at Houston a little
+   * under halfway through, the model at 37.1% for Houston and Kalshi paying
+   * 49.5%, twelve points apart, with two other games over the bar at the same
+   * moment.
+   *
+   * Measured across 97 moments of this afternoon, the two sit a median of 0.9
+   * points apart. The marker is meant to be rare, so a build that shows it on
+   * an ordinary card has lost its threshold rather than found a story.
+   */
+  test('a card says when the model and the exchange disagree, and how far apart @cross', async ({ page }) => {
+    await openReplay(page, { at: 0.45 });
+    const chip = page.locator('.odds-chip.is-split').first();
+    await expect(chip).toBeVisible();
+    await expect(chip).toContainText(/^Split\d+ pts$/);
+    await expect(chip).toHaveAttribute('title', /model says .*Kalshi is paying/);
+    await expect(chip).toHaveAttribute('title', /neither is corrected/);
+  });
+
+  /**
+   * Pinning this to a moment with no marker at all was the first attempt and it
+   * was the wrong test: which games are over the bar changes second by second,
+   * so it asserted the afternoon rather than the code. The property worth
+   * holding is that every marker shown has earned it, and that most cards have
+   * none.
+   */
+  test('every disagreement marker is over the bar, and most cards carry none', async ({ page }) => {
+    await openReplay(page, { at: 0.5 });
+    await expect(liveCards(page).first().locator('.card-odds')).toBeVisible();
+    const live = await liveCards(page).count();
+    const marks = await page.locator('.odds-chip.is-split').allInnerTexts();
+    for (const text of marks) {
+      const points = Number(text.replace(/\D+/g, ''));
+      expect(points, `"${text}" is below the eight point bar`).toBeGreaterThanOrEqual(8);
+    }
+    expect(marks.length, 'the marker should be rare, not the usual state of a card').toBeLessThan(live / 2);
+  });
+
   test('turning odds off in Display settings removes them from cards and the game page', async ({ page }) => {
     await openReplay(page, { at: 0.55 });
     await expect(liveCards(page).first().locator('.card-odds')).toBeVisible();

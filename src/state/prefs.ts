@@ -14,7 +14,7 @@ import type { FieldStyle } from '../field/style';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type Effects = 'full' | 'reduced' | 'flat';
-export type SortMode = 'watch' | 'kickoff' | 'favorites' | 'closest';
+export type SortMode = 'watch' | 'kickoff' | 'favorites' | 'closest' | 'disagreement';
 export type LeagueFilter = 'all' | LeagueId;
 export type DayMode = 'live' | 'today' | 'date';
 export type WallSize = 4 | 9 | 16;
