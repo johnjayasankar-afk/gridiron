@@ -46,6 +46,10 @@ export class EspnProvider implements SportsProvider {
   };
 
   readonly diagnostics: NormalizeDiagnostics = newDiagnostics();
+
+  dataQuality(): Record<string, number> {
+    return { ...this.diagnostics };
+  }
   private coverage = new Map<string, DiscoveredCoverage>();
   private conferences = new Map<string, { info: ConferenceInfo | null; at: number }>();
   private seasons = new Map<string, { value: { season: number; seasonType: number } | null; at: number }>();

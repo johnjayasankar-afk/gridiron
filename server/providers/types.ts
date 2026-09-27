@@ -65,6 +65,19 @@ export interface SportsProvider {
   fetchSlate(league: LeagueId, dateKey: string, options: SlateOptions): Promise<SlateResult>;
   fetchDetail(gameId: GameId, knownDivisions?: Division[]): Promise<DetailResult>;
   /**
+   * What the provider's data got wrong, counted since the process started.
+   *
+   * Normalizing already notices these: an event it cannot read, a play that
+   * arrives twice, a ball spot whose label and yard line disagree. Until now it
+   * counted them and nothing ever asked, so the numbers only existed inside the
+   * provider. They belong on /api/health, where a run of them is the first sign
+   * that the feed has changed shape under us.
+   *
+   * Counts, never a verdict, and never a reason to show a viewer something the
+   * provider did not report.
+   */
+  dataQuality?(): Record<string, number>;
+  /**
    * Optional push stream. A push provider still implements fetchSlate and
    * fetchDetail, which the engine uses to reconcile after reconnects.
    */

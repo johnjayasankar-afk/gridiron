@@ -393,6 +393,7 @@ export function createApp(options: AppOptions) {
           teamsAvailable: !!options.teams,
           fetcher: options.fetcherStats(),
           engine: options.engine.stats(),
+          dataQuality: options.engine.dataQuality?.() ?? {},
           ...options.health?.(),
         });
       }

@@ -86,6 +86,10 @@ function maxAgeFor(data: unknown): number {
 export class SportradarProvider implements SportsProvider {
   readonly info: ProviderInfo;
   readonly diagnostics: SportradarDiagnostics = newSportradarDiagnostics();
+
+  dataQuality(): Record<string, number> {
+    return { ...this.diagnostics };
+  }
   readonly subscribe?: (onEvent: (event: ProviderPushEvent) => void) => () => void;
 
   private readonly client: SportradarClient;

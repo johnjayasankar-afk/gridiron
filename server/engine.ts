@@ -256,6 +256,11 @@ export class GridironEngine {
     return this.provider.info;
   }
 
+  /** What the provider's data got wrong so far. Empty when a provider does not count. */
+  dataQuality(): Record<string, number> {
+    return this.provider.dataQuality?.() ?? {};
+  }
+
   today() {
     return this.todayKey();
   }
