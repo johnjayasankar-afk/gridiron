@@ -201,6 +201,64 @@ somewhere other than inside drei, which means not using drei's `View`.
 That is the honest end of this investigation: the next real win is in how the
 views are measured, and it is a change to the renderer, not a tweak around it.
 
+## It was real, and the canvas was in the wrong place
+
+Everything below this section that says the fields-stay-fixed report could not
+be reproduced was wrong. It reproduces. Two screenshots of a live slate settled
+it: the top row of cards had empty field boxes, and the row beneath showed
+fields belonging to the row above it, a Nebraska field on a Campbell card and a
+Virginia field on a Towson card. Every field was being drawn at the rectangle
+its card had occupied one scroll position earlier.
+
+**Why it was missed.** The number being watched was pixels per redraw, averaged
+over a gesture, and it kept landing near 22px. An average cannot see this. When
+a redraw is skipped the error is not 22px, it is however far the page went
+before the next one lands, and on a full slate that is a whole card. The average
+of many small frames and a few enormous ones looked fine. Two other mistakes
+made it worse: measurements ran against a thirteen card replay when a live slate
+carries 116, and `document.querySelector('canvas')` returns the atmosphere
+background, which is fixed and never moves, so several runs were measuring an
+element that is correct by definition.
+
+**Why it happened.** The canvas was fixed to the viewport, and each field is
+scissored to its card's rectangle as of the frame it was drawn in. So a drawn
+frame is only correct for one scroll position, and the page keeps moving on the
+compositor whether or not this thread manages another frame. It cannot be fixed
+by drawing faster: this display asks for 120 frames a second, a full slate
+mounts a dozen views, and a WebGL frame per scrolled pixel is not available.
+
+Correcting it from a scroll listener does not work either, which is worth
+recording because it was the previous attempt and it measured clean. The page
+scrolls on the compositor and the scroll event arrives on this thread
+afterwards, so the correction is applied a frame late, every frame, which is the
+lag it was meant to remove.
+
+**The fix.** The canvas stops being fixed. Absolutely positioned with no
+positioned ancestor, it sits in the initial containing block, a viewport-sized
+box at the top of the document, and scrolls with the document like everything
+else, on the compositor, at whatever rate the display runs. A drawn frame only
+has to put that box back over the viewport, which is a translate by the scroll
+position it is about to draw for, applied before drei measures anything.
+
+**The test that shows it, with nothing left to interpret.** Scroll the page by a
+card's height in one step and read the positions in the same task, before any
+frame can be drawn:
+
+| | card moved | canvas moved | field sits from its card |
+|---|---|---|---|
+| fixed | -400px | 0px | **400px** |
+| in the page | -400px | -400px | **0px** |
+
+Zero with no redraw at all. The property holds at any frame rate, including
+none, which is what makes it a fix rather than an improvement. Checked too that
+a canvas living in the page does not add to the page: scroll height identical at
+top and bottom, viewport covered at both ends, no horizontal overflow.
+
+**The lesson worth keeping.** An averaged metric hid a whole-card error for
+three rounds of work while reporting success. When someone says a thing is
+visibly broken and the numbers say it is fine, the numbers are measuring the
+wrong thing. Look at a screenshot.
+
 ## The bug class: space reserved, pixels late
 
 Two separate complaints turned out to be the same mistake made twice. An element
