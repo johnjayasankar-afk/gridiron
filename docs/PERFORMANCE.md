@@ -368,6 +368,75 @@ to zero the moment a new frame lands.
 It reads 0px at rest and 0px once a scroll settles, so it is doing nothing in the
 normal case. At 20x throttle, one frame in eight carried an offset.
 
+## What a live slate actually costs
+
+Measured 27 September 2026 against a real ESPN slate, not the thirteen card
+replay every earlier number came from. A live Saturday is 116 cards, 7,266 DOM
+nodes and 26,000 pixels of page, with four cards on screen.
+
+Sitting still, touching nothing, on the deployed site:
+
+| | |
+|---|---|
+| style recalculations | 394 in ten seconds |
+| time in style recalculation | 571ms |
+| layout | 3ms |
+| total task time | 2,374ms, about a quarter of a core |
+
+Layout is free and script is nearly free. The cost is style recalculation, and
+it comes from animations that are not composited. Two were running on every
+live card: the live dot pulsing by animating `box-shadow`, and the rotating
+edge glow animating a registered custom property inside a `conic-gradient`, at
+`steps(270)` over 9s, which is thirty restyles a second per card.
+
+The dot now pulses from a pseudo-element on transform and opacity, which the
+compositor handles alone.
+
+**Correcting the commit that made that change.** It says the dots accounted for
+"most of" those 394 recalculations. They did not. Interleaved over two rounds on
+a page with live games, idle style recalculations went from 36 and 32 to 28 and
+14: real, repeatable, about a third. The rotating edge is the larger share and
+is still there. The attribution was assumed from the mechanism rather than
+measured, which is the same mistake as trusting an averaged number.
+
+The edge glow was left alone deliberately. Once the dot was composited, the
+remaining style recalculation on a page with live games measured 44ms per ten
+seconds. Trading a visible effect for that is not worth it, and lowering its
+step count would be a guess dressed as an optimisation.
+
+## content-visibility on the cards: measured, worse, reverted
+
+116 cards and four on screen looks like exactly what `content-visibility: auto`
+is for, and it skips off-screen animations as a bonus. Interleaved over three
+rounds on identical static data, 124 final games, it was worse every time:
+
+| round | without | with |
+|---|---|---|
+| 1 | 33% of a core | 40% |
+| 2 | 21% | 23% |
+| 3 | 34% | 67% |
+
+Consistent direction, so not noise. The browser does first layout for each card
+as it comes into range, and `contain-intrinsic-size: auto` corrections relayout
+the grid; during a scroll that costs more than the off-screen work it saves.
+Reverted.
+
+## Three ways this set of measurements lied first
+
+**Measuring before the page existed.** The harness waited a fixed sixteen
+seconds, and a live slate had not arrived. It reported 86% of a core in script
+and called it "sitting still". It was page load. The harness now waits for the
+card count to stop changing.
+
+**Measuring against live data.** Two servers both reading ESPN gave A 57%, 45%,
+22% across three runs of the same build, because the slate itself was changing.
+An A/B needs a fixed past date, where every game is final and both builds see
+the same bytes.
+
+**Measuring the wrong canvas.** `document.querySelector('canvas')` returns the
+atmosphere background, which is fixed to the viewport and correct by definition.
+The field canvas is `.field-canvas canvas`.
+
 ## Rules for using the harness
 
 **Nine rounds minimum.** At five rounds it reported one change as 94% worse and
