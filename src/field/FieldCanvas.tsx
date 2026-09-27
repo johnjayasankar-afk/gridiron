@@ -75,12 +75,24 @@ function Invalidator() {
    */
   const anchored = useRef<number | null>(null);
   useFrame(() => {
+    /*
+     * The element that moves has to be the element react-three-fiber measures,
+     * or the two disagree and every scissor rectangle is off by the difference.
+     * It measures the container it renders, not the canvas inside it, so the
+     * container is what gets moved. Putting the transform on the canvas instead
+     * left the container drifting to -scrollY while the canvas sat at zero, and
+     * the fields were drawn a screenful down inside their own boxes.
+     */
+    const host = (canvas.closest('.field-canvas') as HTMLElement | null) ?? canvas;
     const y = Math.round(window.scrollY || 0);
     if (anchored.current === y) return;
     anchored.current = y;
-    canvas.style.transform = y ? `translate3d(0, ${y}px, 0)` : '';
+    host.style.transform = y ? `translate3d(0, ${y}px, 0)` : '';
   }, -200);
-  useEffect(() => () => { canvas.style.transform = ''; }, [canvas]);
+  useEffect(() => {
+    const host = (canvas.closest('.field-canvas') as HTMLElement | null) ?? canvas;
+    return () => { host.style.transform = ''; };
+  }, [canvas]);
 
   useEffect(() => {
     let trailing: ReturnType<typeof setTimeout>[] = [];
@@ -269,6 +281,14 @@ export function FieldCanvas() {
        */
       flat
       dpr={dpr}
+      /*
+       * Never re-measure on scroll. The default re-measures 50ms after one,
+       * which catches the container part way through travelling with the page
+       * and caches that as where the canvas is. Every field is then scissored
+       * against a position it is not in. Its size is what matters here, and its
+       * size only changes when the window's does.
+       */
+      resize={{ scroll: false, debounce: { scroll: 0, resize: 0 } }}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance', stencil: false }}
       style={{ position: 'absolute', inset: 0, width: 'auto', height: 'auto', pointerEvents: 'none', zIndex: 5 }}
       aria-hidden="true"
