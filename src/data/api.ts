@@ -40,6 +40,8 @@ export interface Health {
   today: string;
   serverTime: string;
   replayAvailable: boolean;
+  /** What the provider's data got wrong, counted by the server since it started. */
+  dataQuality?: Record<string, number>;
 }
 
 export interface ReplayScenario {

@@ -518,6 +518,46 @@ export function SettingsDialog({ open, onClose }: DialogOpen) {
   );
 }
 
+
+/**
+ * The server's count of what the provider's data got wrong. Zero is worth
+ * showing: it says the feed read clean, not that nobody looked.
+ */
+const QUALITY_LABELS: Array<[string, string]> = [
+  ['duplicatePlays', 'Plays that arrived more than once'],
+  ['reorderedPlays', 'Plays that arrived out of order'],
+  ['spotSignalConflicts', 'Ball spots where the label and the yard line disagreed'],
+  ['ignoredStoppageTeams', 'Timeouts ignored as a possession signal'],
+  ['invalidEvents', 'Events that could not be read at all'],
+];
+
+function DataQualityTable({ counts }: { counts: Record<string, number> | null }) {
+  if (!counts) return <p>These appear once the server reports in.</p>;
+  const rows = QUALITY_LABELS.filter(([key]) => typeof counts[key] === 'number');
+  if (!rows.length) return <p>This server does not count them.</p>;
+  return (
+    <div className="table-wrap">
+      <table className="stats">
+        <caption className="sr-only">Provider data problems counted since the server started</caption>
+        <thead>
+          <tr>
+            <th scope="col">What happened</th>
+            <th scope="col">Times</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([key, label]) => (
+            <tr key={key}>
+              <th scope="row">{label}</th>
+              <td className="mono">{counts[key].toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function HelpDialog({ open, onClose }: DialogOpen) {
   const health = useLive((s) => s.health);
   const hello = useLive((s) => s.hello);
@@ -582,6 +622,13 @@ export function HelpDialog({ open, onClose }: DialogOpen) {
             <li>Clocks are shown exactly as last reported and are never counted down locally, so a clock can look paused between updates.</li>
             <li>The provider has its own delay on top of this. None of this is official real-time tracking.</li>
           </ul>
+        </section>
+        <section>
+          <h3>What the feed got wrong</h3>
+          <p>
+            Provider data arrives imperfect and the server repairs some of it before a card is drawn. These are counts since the server started, across every game it has read. They are not a judgement about any one game, and nothing here changes what you are shown: a play that arrives twice is still one play, and a play that arrives late is put back in its place.
+          </p>
+          <DataQualityTable counts={health?.dataQuality ?? null} />
         </section>
         <section>
           <h3>Reading the field</h3>
